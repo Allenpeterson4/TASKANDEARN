@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp } from 'lucide-react';
+import { useSiteContent } from '@/hooks/useSiteContent';
 
 const faqs = [
   {
@@ -97,6 +98,19 @@ function FAQItem({ question, answer, index }: { question: string; answer: string
 }
 
 export default function FAQ() {
+  const contentKeys = faqs.flatMap((_, index) => {
+    const key = String(index + 1).padStart(2, '0');
+    return [`faq.${key}.question`, `faq.${key}.answer`];
+  });
+  const content = useSiteContent(contentKeys);
+  const visibleFaqs = faqs.map((faq, index) => {
+    const key = String(index + 1).padStart(2, '0');
+    return {
+      question: content[`faq.${key}.question`] || faq.question,
+      answer: content[`faq.${key}.answer`] || faq.answer,
+    };
+  });
+
   return (
     <section id="faq" className="relative py-28 bg-[#0a0a0a] overflow-hidden">
       <div className="absolute bottom-0 left-1/4 w-[500px] h-[400px] bg-amber-500/3 rounded-full blur-[100px] pointer-events-none" />
@@ -122,7 +136,7 @@ export default function FAQ() {
 
         {/* FAQ list */}
         <div className="space-y-3">
-          {faqs.map((faq, i) => (
+          {visibleFaqs.map((faq, i) => (
             <FAQItem key={i} {...faq} index={i} />
           ))}
         </div>

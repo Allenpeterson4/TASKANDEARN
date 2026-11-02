@@ -19,8 +19,10 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
   const [showPw, setShowPw] = useState(false);
   const [saving, setSaving] = useState(false);
   const [savingPw, setSavingPw] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [msg, setMsg] = useState('');
   const [pwMsg, setPwMsg] = useState('');
+  const [publicPayoutOptIn, setPublicPayoutOptIn] = useState(profile?.public_activity_opt_in ?? false);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -39,6 +41,45 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
   };
   const tc = tierColors[profile?.tier ?? 'Bronze'] ?? tierColors.Bronze;
 
+  async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file) return;
+    if (!profile?.user_id) return setMsg('Your profile is not ready yet.');
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      setMsg('Choose a PNG, JPEG, or WebP image smaller than 2 MB.');
+      return;
+    }
+
+    setUploadingAvatar(true);
+    const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
+    const path = `${profile.user_id}/avatar-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage.from('member-avatars').upload(path, file, {
+      contentType: file.type,
+      upsert: false,
+    });
+    if (uploadError) {
+      setUploadingAvatar(false);
+      setMsg(uploadError.message);
+      return;
+    }
+
+    const { data: publicUrl } = supabase.storage.from('member-avatars').getPublicUrl(path);
+    const { data, error } = await supabase.from('profiles')
+      .update({ avatar_url: publicUrl.publicUrl })
+      .eq('user_id', profile.user_id)
+      .select()
+      .single();
+    setUploadingAvatar(false);
+    if (error) {
+      await supabase.storage.from('member-avatars').remove([path]);
+      setMsg(error.message);
+      return;
+    }
+    onProfileUpdated(data as Profile);
+    setMsg('Profile photo updated.');
+  }
+
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     setMsg('');
@@ -46,7 +87,12 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .update({ full_name: form.full_name, username: form.username, phone: form.phone })
+        .update({
+          full_name: form.full_name,
+          username: form.username,
+          phone: form.phone,
+          public_activity_opt_in: publicPayoutOptIn,
+        })
         .eq('user_id', profile?.user_id)
         .select()
         .single();
@@ -86,11 +132,14 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
       <div className="bg-[#111] border border-white/6 rounded-2xl p-6 flex items-center gap-5">
         <div className="relative">
           <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-amber-400/30 to-orange-600/30 border-2 border-amber-400/20 flex items-center justify-center">
-            <span className="text-amber-400 font-black text-2xl">{initials}</span>
+            {profile?.avatar_url
+              ? <img src={profile.avatar_url} alt="Profile avatar" className="h-full w-full rounded-[inherit] object-cover" />
+              : <span className="text-amber-400 font-black text-2xl">{initials}</span>}
           </div>
-          <button className="absolute -bottom-1 -right-1 w-7 h-7 bg-amber-400 rounded-lg flex items-center justify-center hover:bg-amber-300 transition-colors shadow-lg">
-            <Camera size={13} className="text-black" />
-          </button>
+          <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-400 shadow-lg transition-colors hover:bg-amber-300" title="Upload profile photo">
+            {uploadingAvatar ? <Loader2 size={13} className="animate-spin text-black" /> : <Camera size={13} className="text-black" />}
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={uploadingAvatar} className="sr-only" />
+          </label>
         </div>
         <div>
           <h2 className="text-white font-black text-xl">{form.full_name || 'Your Name'}</h2>
@@ -174,6 +223,11 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
               />
             </div>
           </div>
+
+          <label className="flex items-start gap-3 border border-white/8 p-3 text-sm text-gray-300">
+            <input type="checkbox" checked={publicPayoutOptIn} onChange={event => setPublicPayoutOptIn(event.target.checked)} className="mt-0.5 accent-amber-400" />
+            <span>Allow my completed payouts to appear in the public activity feed with my name masked. This is optional and can be changed anytime.</span>
+          </label>
 
           {msg && (
             <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border ${

@@ -1,4 +1,5 @@
 import { ArrowRight, ChevronDown, Star, Users, Zap, Shield } from 'lucide-react';
+import { useSiteContent } from '@/hooks/useSiteContent';
 
 const stats = [
   { value: '50K+', label: 'Active Earners' },
@@ -8,6 +9,9 @@ const stats = [
 ];
 
 export default function Hero() {
+  const content = useSiteContent(['home.hero.title', 'home.hero.description', 'home.hero.image']);
+  const titleLines = (content['home.hero.title'] || 'Turn Every\nTask into\nReal Naira').split('\n');
+
   const scrollTo = (id: string) => {
     document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -44,19 +48,18 @@ export default function Hero() {
             </div>
 
             <h1 className="text-5xl sm:text-6xl lg:text-[4.5rem] font-black text-white leading-[1.05] mb-6">
-              Turn Every
-              <br />
-              <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-orange-600">
-                Task into
-              </span>
-              <br />
-              Real Naira
+              {titleLines.map((line, index) => (
+                <span
+                  key={`${line}-${index}`}
+                  className={`block ${index === 1 ? 'text-transparent bg-clip-text bg-gradient-to-r from-amber-400 via-orange-400 to-orange-600' : ''}`}
+                >
+                  {line}
+                </span>
+              ))}
             </h1>
 
             <p className="text-gray-400 text-lg leading-relaxed mb-8 max-w-xl">
-              Join thousands of Nigerians earning significant rewards daily by
-              completing simple tasks, surveys, and referring friends. Your
-              hustle, your earnings — paid directly to your bank account.
+              {content['home.hero.description'] || 'Join thousands of Nigerians earning significant rewards daily by completing simple tasks, surveys, and referring friends. Your hustle, your earnings, paid directly to your bank account.'}
             </p>
 
             {/* Trust signals */}
@@ -97,7 +100,7 @@ export default function Hero() {
           <div className="relative lg:pl-8">
             <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
               <img
-                src="https://images.pexels.com/photos/5702321/pexels-photo-5702321.jpeg?auto=compress&cs=tinysrgb&h=650&w=940"
+                src={content['home.hero.image'] || 'https://images.pexels.com/photos/5702321/pexels-photo-5702321.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'}
                 alt="Earning potential with MrHustler"
                 className="w-full h-[480px] object-cover"
               />

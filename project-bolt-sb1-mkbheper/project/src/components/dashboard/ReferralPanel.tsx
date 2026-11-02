@@ -11,7 +11,7 @@ interface Props {
 export default function ReferralPanel({ profile, balance, referrals }: Props) {
   const [copied, setCopied] = useState(false);
   const code = profile?.referral_code ?? 'XXXXXX';
-  const link = `https://mrhustler.ng/ref/${code}`;
+  const link = `${window.location.origin}/?ref=${encodeURIComponent(code)}`;
 
   function copyLink() {
     navigator.clipboard.writeText(link).catch(() => {});

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CreditCard, Clock, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
 import type { Balance, Withdrawal } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
@@ -6,7 +6,6 @@ import { supabase } from '@/lib/supabase';
 interface Props {
   balance: Balance | null;
   withdrawals: Withdrawal[];
-  userId: string;
   onWithdrawalAdded: (w: Withdrawal) => void;
 }
 
@@ -15,14 +14,32 @@ const banks = [
   'Polaris Bank', 'Fidelity Bank', 'FCMB', 'Union Bank', 'Stanbic IBTC',
   'Kuda Bank', 'Opay', 'Palmpay', 'Moniepoint', 'VFD Bank', 'Rubies MFB',
 ];
+const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function WithdrawalPanel({ balance, withdrawals, userId, onWithdrawalAdded }: Props) {
+export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdded }: Props) {
   const [form, setForm] = useState({ amount: '', bank: '', accountNo: '', accountName: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const [minimumWithdrawal, setMinimumWithdrawal] = useState(5000);
+  const [payoutWindow, setPayoutWindow] = useState({ days: [5], start: '14:00', end: '18:00', timezone: 'Africa/Lagos' });
 
   const totalAvailable = (balance?.reward_balance ?? 0) + (balance?.referral_balance ?? 0);
+
+  useEffect(() => {
+    supabase.from('payout_settings').select('minimum_amount, payout_days, window_start, window_end, timezone').eq('singleton', true).maybeSingle()
+      .then(({ data }) => {
+        if (data) {
+          setMinimumWithdrawal(Number(data.minimum_amount));
+          setPayoutWindow({
+            days: data.payout_days,
+            start: String(data.window_start).slice(0, 5),
+            end: String(data.window_end).slice(0, 5),
+            timezone: data.timezone,
+          });
+        }
+      });
+  }, []);
 
   const set = (k: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
@@ -35,25 +52,19 @@ export default function WithdrawalPanel({ balance, withdrawals, userId, onWithdr
     const amt = parseFloat(form.amount);
     if (isNaN(amt) || amt <= 0) return setError('Enter a valid amount.');
     if (amt > totalAvailable) return setError('Insufficient balance for this withdrawal.');
-    if (amt < 500) return setError('Minimum withdrawal is ₦500.');
+    if (amt < minimumWithdrawal) return setError(`Minimum withdrawal is ₦${minimumWithdrawal.toLocaleString()}.`);
 
     setLoading(true);
     try {
-      const { data, error: err } = await supabase
-        .from('withdrawals')
-        .insert({
-          user_id: userId,
-          amount: amt,
-          bank_name: form.bank,
-          account_no: form.accountNo,
-          account_name: form.accountName,
-          status: 'pending',
-        })
-        .select()
-        .single();
+      const { data, error: err } = await supabase.rpc('request_withdrawal', {
+        p_amount: amt,
+        p_bank_name: form.bank,
+        p_account_no: form.accountNo,
+        p_account_name: form.accountName,
+      });
       if (err) throw err;
       onWithdrawalAdded(data as Withdrawal);
-      setSuccess('Withdrawal request submitted! Processing within 2–24 hours.');
+      setSuccess('Withdrawal request queued for the next configured payout window.');
       setForm({ amount: '', bank: '', accountNo: '', accountName: '' });
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Request failed. Try again.');
@@ -91,7 +102,7 @@ export default function WithdrawalPanel({ balance, withdrawals, userId, onWithdr
           </div>
           <div>
             <p className="text-white font-bold text-sm">Request Withdrawal</p>
-            <p className="text-gray-400 text-xs">Minimum ₦500 · Processed within 2–24 hrs</p>
+            <p className="text-gray-400 text-xs">Minimum ₦{minimumWithdrawal.toLocaleString()} · {payoutWindow.days.map(day => weekdayNames[day]).join(', ')} {payoutWindow.start}–{payoutWindow.end} ({payoutWindow.timezone})</p>
           </div>
         </div>
 
@@ -101,7 +112,7 @@ export default function WithdrawalPanel({ balance, withdrawals, userId, onWithdr
             <input
               type="number"
               required
-              min={500}
+              min={minimumWithdrawal}
               max={totalAvailable}
               placeholder="e.g. 2000"
               value={form.amount}
@@ -176,7 +187,7 @@ export default function WithdrawalPanel({ balance, withdrawals, userId, onWithdr
 
           <button
             type="submit"
-            disabled={loading || totalAvailable < 500}
+            disabled={loading || totalAvailable < minimumWithdrawal}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-xl hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : 'Submit Withdrawal Request'}

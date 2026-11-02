@@ -9,7 +9,9 @@ import {
   X,
   Bell,
   Menu,
+  Crown,
 } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 export type DashTab =
   | 'overview'
@@ -17,6 +19,7 @@ export type DashTab =
   | 'referral'
   | 'withdrawal'
   | 'profile'
+  | 'plans'
   | 'support';
 
 interface Props {
@@ -25,6 +28,8 @@ interface Props {
   fullName: string;
   tier: string;
   onLogout: () => void;
+  taskCount: number;
+  showPlans: boolean;
   sideOpen: boolean;
   setSideOpen: (v: boolean) => void;
 }
@@ -35,6 +40,7 @@ const navItems: { id: DashTab; icon: typeof LayoutDashboard; label: string }[] =
   { id: 'referral',   icon: Users,           label: 'Referrals' },
   { id: 'withdrawal', icon: CreditCard,      label: 'Withdrawal' },
   { id: 'profile',    icon: User,            label: 'Profile' },
+  { id: 'plans',      icon: Crown,           label: 'Plans' },
   { id: 'support',    icon: HelpCircle,      label: 'Support' },
 ];
 
@@ -46,7 +52,7 @@ const tierColors: Record<string, string> = {
 };
 
 export default function DashSidebar({
-  active, onChange, fullName, tier, onLogout, sideOpen, setSideOpen,
+  active, onChange, fullName, tier, onLogout, taskCount, showPlans, sideOpen, setSideOpen,
 }: Props) {
   const initials = fullName
     ? fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -107,7 +113,7 @@ export default function DashSidebar({
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <p className="text-gray-600 text-[10px] font-bold uppercase tracking-wider px-3 mb-3">Menu</p>
           <ul className="space-y-1">
-            {navItems.map(item => {
+            {navItems.filter(item => item.id !== 'plans' || showPlans).map(item => {
               const Icon = item.icon;
               const isActive = active === item.id;
               return (
@@ -122,9 +128,9 @@ export default function DashSidebar({
                   >
                     <Icon size={17} className={isActive ? 'text-amber-400' : ''} />
                     {item.label}
-                    {item.id === 'tasks' && (
+                    {item.id === 'tasks' && taskCount > 0 && (
                       <span className="ml-auto bg-amber-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full">
-                        12
+                        {taskCount}
                       </span>
                     )}
                   </button>
@@ -164,6 +170,7 @@ export function DashTopbar({
     referral:   'Referral Program',
     withdrawal: 'Withdrawal',
     profile:    'My Profile',
+    plans:      'Plans & Membership',
     support:    'Help & Support',
   };
 
@@ -179,6 +186,7 @@ export function DashTopbar({
         <h1 className="text-white font-bold text-lg">{labels[tab]}</h1>
       </div>
       <div className="flex items-center gap-2">
+        <ThemeToggle />
         <button
           onClick={onNotif}
           className="relative p-2 rounded-lg text-gray-400 hover:text-white hover:bg-white/8 transition-colors"

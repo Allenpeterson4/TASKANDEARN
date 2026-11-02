@@ -10,6 +10,7 @@ import ReferralPanel from './ReferralPanel';
 import WithdrawalPanel from './WithdrawalPanel';
 import ProfilePanel from './ProfilePanel';
 import SupportPanel from './SupportPanel';
+import SubscriptionPanel from './SubscriptionPanel';
 
 interface Props {
   user: User;
@@ -26,6 +27,8 @@ export default function Dashboard({ user }: Props) {
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [currentPlanCode, setCurrentPlanCode] = useState('free');
+  const [availablePlanCodes, setAvailablePlanCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,13 +40,17 @@ export default function Dashboard({ user }: Props) {
         { data: comps },
         { data: refs },
         { data: wds },
+        { data: paidPlans },
+        { data: activeSubscription },
       ] = await Promise.all([
         supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
         supabase.from('balances').select('*').eq('user_id', user.id).maybeSingle(),
-        supabase.from('tasks').select('*').eq('is_active', true).order('created_at', { ascending: false }),
+        supabase.from('tasks').select('*').eq('is_active', true).order('sort_order').order('created_at', { ascending: false }),
         supabase.from('task_completions').select('*').eq('user_id', user.id),
         supabase.from('referrals').select('*').eq('referrer_id', user.id),
         supabase.from('withdrawals').select('*').eq('user_id', user.id).order('requested_at', { ascending: false }),
+        supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
+        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').gt('ends_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setProfile(prof ?? null);
       setBalance(bal ?? null);
@@ -51,14 +58,35 @@ export default function Dashboard({ user }: Props) {
       setCompletions(comps ?? []);
       setReferrals(refs ?? []);
       setWithdrawals(wds ?? []);
+      const activePlanCodes = (paidPlans ?? []).map(plan => plan.plan_code);
+      setAvailablePlanCodes(activePlanCodes);
+      setCurrentPlanCode(activeSubscription?.plan_code ?? 'free');
       setLoading(false);
-
-      // Show welcome modal for brand new users (no completions yet)
-      if (!comps || comps.length === 0) {
-        setTimeout(() => setShowModal(true), 800);
-      }
+      setShowModal(true);
     }
     load();
+  }, [user.id]);
+
+  useEffect(() => {
+    let active = true;
+    async function refreshPlanAvailability() {
+      const [{ data: plans }, { data: subscription }] = await Promise.all([
+        supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
+        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').gt('ends_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      if (active) {
+        setAvailablePlanCodes((plans ?? []).map(plan => plan.plan_code));
+        setCurrentPlanCode(subscription?.plan_code ?? 'free');
+      }
+    }
+    const refresh = () => { void refreshPlanAvailability(); };
+    const timer = window.setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refresh);
+    };
   }, [user.id]);
 
   async function handleLogout() {
@@ -73,6 +101,18 @@ export default function Dashboard({ user }: Props) {
             <span className="text-white font-black text-2xl">M</span>
           </div>
           <p className="text-gray-400 text-sm">Loading dashboard…</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (profile?.account_status && profile.account_status !== 'active') {
+    return (
+      <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center px-4 text-center">
+        <div className="max-w-md">
+          <h1 className="text-white text-2xl font-black">Account {profile.account_status}</h1>
+          <p className="mt-3 text-gray-400">{profile.status_reason || 'Please contact support if you believe this is a mistake.'}</p>
+          <button onClick={handleLogout} className="mt-6 rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5">Sign out</button>
         </div>
       </div>
     );
@@ -93,6 +133,8 @@ export default function Dashboard({ user }: Props) {
         fullName={profile?.full_name ?? user.email?.split('@')[0] ?? 'Hustler'}
         tier={profile?.tier ?? 'Bronze'}
         onLogout={handleLogout}
+        taskCount={tasks.length}
+        showPlans={availablePlanCodes.length > 0}
         sideOpen={sideOpen}
         setSideOpen={setSideOpen}
       />
@@ -122,6 +164,9 @@ export default function Dashboard({ user }: Props) {
                 tasks={tasks}
                 completions={completions}
                 userId={user.id}
+                currentPlanCode={currentPlanCode}
+                availablePlanCodes={availablePlanCodes}
+                onUpgrade={() => setTab('plans')}
                 onCompletionAdded={(c) => setCompletions(prev => [...prev, c])}
               />
             )}
@@ -136,7 +181,6 @@ export default function Dashboard({ user }: Props) {
               <WithdrawalPanel
                 balance={balance}
                 withdrawals={withdrawals}
-                userId={user.id}
                 onWithdrawalAdded={(w) => setWithdrawals(prev => [w, ...prev])}
               />
             )}
@@ -147,6 +191,7 @@ export default function Dashboard({ user }: Props) {
                 onProfileUpdated={(p) => setProfile(p)}
               />
             )}
+            {tab === 'plans' && <SubscriptionPanel userId={user.id} />}
             {tab === 'support' && <SupportPanel />}
           </div>
         </main>

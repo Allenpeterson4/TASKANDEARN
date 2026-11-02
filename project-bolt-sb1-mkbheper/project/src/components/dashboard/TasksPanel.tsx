@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Zap, CheckCircle, Clock, Filter, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock } from 'lucide-react';
 import type { Task, TaskCompletion } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 
@@ -7,45 +7,85 @@ interface Props {
   tasks: Task[];
   completions: TaskCompletion[];
   userId: string;
+  currentPlanCode: string;
+  availablePlanCodes: string[];
+  onUpgrade: () => void;
   onCompletionAdded: (c: TaskCompletion) => void;
 }
 
-const categories = ['All', 'Social Media', 'Survey', 'Review', 'App Install', 'Data Entry', 'Video', 'Sign-up', 'Referral'];
-const difficulties = ['All', 'Easy', 'Medium', 'Hard'];
-const diffColors: Record<string, string> = {
-  Easy:   'text-green-400 bg-green-400/10 border-green-400/20',
-  Medium: 'text-amber-400 bg-amber-400/10 border-amber-400/20',
-  Hard:   'text-red-400 bg-red-400/10 border-red-400/20',
-};
+const planRanks: Record<string, number> = { free: 0, premium: 1, vip: 2 };
 
-export default function TasksPanel({ tasks, completions, userId, onCompletionAdded }: Props) {
+export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, onUpgrade, onCompletionAdded }: Props) {
   const [cat, setCat] = useState('All');
-  const [diff, setDiff] = useState('All');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [toast, setToast] = useState('');
+  const [proofs, setProofs] = useState<Record<string, string>>({});
+  const [proofFiles, setProofFiles] = useState<Record<string, File | undefined>>({});
 
-  const completedIds = new Set(completions.map(c => c.task_id));
+  const taskCompletionMap = new Map(completions.map(completion => [completion.task_id, completion]));
+  const categories = ['All', ...new Set(tasks.map(task => task.category))];
+
+  useEffect(() => {
+    if (cat !== 'All' && !tasks.some(task => task.category === cat)) setCat('All');
+  }, [cat, tasks]);
 
   const filtered = tasks.filter(t =>
-    (cat === 'All' || t.category === cat) &&
-    (diff === 'All' || t.difficulty === diff)
+    cat === 'All' || t.category === cat
   );
 
+  const completedCount = completions.filter(completion => completion.status !== 'rejected').length;
+
   async function startTask(task: Task) {
-    if (completedIds.has(task.id)) return;
+    const existingCompletion = taskCompletionMap.get(task.id);
+    if (existingCompletion && existingCompletion.status !== 'rejected') return;
+    const proofText = proofs[task.id]?.trim() ?? '';
+    const proofFile = proofFiles[task.id];
+    if (!proofText && !proofFile) {
+      showToast('Add proof text or a screenshot before submitting this task.');
+      return;
+    }
     setSubmitting(task.id);
+    let uploadedPath: string | null = null;
     try {
-      const { data, error } = await supabase
-        .from('task_completions')
-        .insert({ user_id: userId, task_id: task.id, status: 'pending' })
-        .select()
-        .single();
+      if (proofFile) {
+        const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '-');
+        uploadedPath = `${userId}/${crypto.randomUUID()}-${safeName}`;
+        const { error: uploadError } = await supabase.storage.from('task-proofs').upload(uploadedPath, proofFile, {
+          contentType: proofFile.type,
+          upsert: false,
+        });
+        if (uploadError) throw uploadError;
+      }
+      const { data, error } = await supabase.rpc('claim_task', {
+        p_task_id: task.id,
+        p_proof_text: proofText || null,
+        p_proof_path: uploadedPath,
+      });
       if (error) throw error;
       onCompletionAdded(data as TaskCompletion);
+      setProofFiles(current => ({ ...current, [task.id]: undefined }));
       showToast(`Task submitted! ₦${task.reward.toLocaleString()} pending verification.`);
     } catch {
+      if (uploadedPath) await supabase.storage.from('task-proofs').remove([uploadedPath]);
       showToast('Could not submit task. Please try again.');
     } finally {
+      setSubmitting(null);
+    }
+  }
+
+  async function startTrackedTask(task: Task) {
+    setSubmitting(task.id);
+    try {
+      const { data, error } = await supabase.rpc('start_task_verification', {
+        p_task_id: task.id,
+      });
+      if (error) throw error;
+      const session = data as { id: string };
+      const destination = new URL(task.task_url);
+      destination.searchParams.set('tracking_id', session.id);
+      window.location.assign(destination.toString());
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'Could not start task tracking.');
       setSubmitting(null);
     }
   }
@@ -88,33 +128,24 @@ export default function TasksPanel({ tasks, completions, userId, onCompletionAdd
         </div>
       </div>
 
-      <div className="flex gap-2">
-        {difficulties.map(d => (
-          <button
-            key={d}
-            onClick={() => setDiff(d)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-              diff === d
-                ? 'bg-white/15 text-white border border-white/20'
-                : 'bg-white/4 text-gray-500 hover:text-gray-300 border border-white/5'
-            }`}
-          >
-            {d}
-          </button>
-        ))}
-      </div>
-
       {/* Tasks count */}
       <p className="text-gray-400 text-sm">
         Showing <span className="text-white font-semibold">{filtered.length}</span> tasks ·{' '}
-        <span className="text-green-400">{completedIds.size} completed</span>
+        <span className="text-green-400">{completedCount} completed</span>
       </p>
 
       {/* Task grid */}
       <div className="grid sm:grid-cols-2 gap-4">
         {filtered.map(task => {
-          const done = completedIds.has(task.id);
+          const completion = taskCompletionMap.get(task.id);
+          const done = !!completion && completion.status !== 'rejected';
           const isSubmitting = submitting === task.id;
+          const taskPlanRank = planRanks[task.required_plan_code] ?? 0;
+          const userPlanRank = planRanks[currentPlanCode] ?? 0;
+          const planLocked = taskPlanRank > userPlanRank;
+          const requiredPlanUnavailable = planLocked && !availablePlanCodes.includes(task.required_plan_code);
+          const campaignUnavailable = !task.is_funded;
+          const locked = planLocked || campaignUnavailable;
 
           return (
             <div
@@ -125,18 +156,48 @@ export default function TasksPanel({ tasks, completions, userId, onCompletionAdd
                   : 'border-white/6 hover:border-amber-400/20 hover:-translate-y-0.5'
               }`}
             >
-              {/* Category + difficulty */}
-              <div className="flex items-center justify-between mb-3">
+              <div className="mb-3">
                 <span className="text-xs text-gray-500 bg-white/5 px-2.5 py-1 rounded-lg">
                   {task.category}
-                </span>
-                <span className={`text-xs font-semibold px-2.5 py-1 rounded-lg border ${diffColors[task.difficulty] ?? ''}`}>
-                  {task.difficulty}
                 </span>
               </div>
 
               <h3 className="text-white font-bold text-sm mb-2">{task.title}</h3>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">{task.description}</p>
+              {task.task_url && task.is_funded && (
+                <a
+                  href={task.task_url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300"
+                >
+                  Open task <ExternalLink size={13} />
+                </a>
+              )}
+              {task.verification_mode === 'manual' && !done && !locked && (
+                <div className="mb-4">
+                  <label className="block text-xs text-gray-400 mb-1.5">
+                    {task.proof_instructions || 'Describe the completed action or upload a screenshot for manual review.'}
+                  </label>
+                  <textarea
+                    value={proofs[task.id] ?? ''}
+                    onChange={event => setProofs(current => ({ ...current, [task.id]: event.target.value }))}
+                    maxLength={2000}
+                    rows={2}
+                    className="w-full resize-y bg-[#0a0a0a] border border-white/8 rounded-lg px-3 py-2 text-white text-xs focus:outline-none focus:border-amber-400/50"
+                  />
+                  <label className="mt-2 block text-xs text-gray-500">
+                    Optional screenshot (PNG, JPEG, or WebP; up to 10 MB)
+                    <input
+                      type="file"
+                      accept="image/png,image/jpeg,image/webp"
+                      onChange={event => setProofFiles(current => ({ ...current, [task.id]: event.target.files?.[0] }))}
+                      className="mt-1 block w-full text-xs text-gray-400 file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:text-white"
+                    />
+                    {proofFiles[task.id] && <span className="mt-1 block text-amber-400">{proofFiles[task.id]?.name}</span>}
+                  </label>
+                </div>
+              )}
 
               <div className="flex items-center justify-between">
                 <div>
@@ -144,10 +205,14 @@ export default function TasksPanel({ tasks, completions, userId, onCompletionAdd
                   <p className="text-gray-600 text-xs">Reward</p>
                 </div>
                 <button
-                  disabled={done || isSubmitting}
-                  onClick={() => startTask(task)}
+                  disabled={done || isSubmitting || (campaignUnavailable && !planLocked) || requiredPlanUnavailable}
+                  onClick={() => {
+                    if (planLocked) onUpgrade();
+                    else if (task.verification_mode === 'automatic') void startTrackedTask(task);
+                    else void startTask(task);
+                  }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                    done
+                    done || requiredPlanUnavailable || (campaignUnavailable && !planLocked)
                       ? 'bg-green-500/10 text-green-400 border border-green-500/20 cursor-default'
                       : 'bg-gradient-to-r from-amber-400 to-orange-500 text-black hover:shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 disabled:opacity-60'
                   }`}
@@ -156,16 +221,26 @@ export default function TasksPanel({ tasks, completions, userId, onCompletionAdd
                     <Loader2 size={14} className="animate-spin" />
                   ) : done ? (
                     <><CheckCircle size={14} /> Submitted</>
+                  ) : planLocked ? (
+                    requiredPlanUnavailable ? 'Plan unavailable' : <><Lock size={14} /> Upgrade plan</>
+                  ) : campaignUnavailable ? (
+                    'Awaiting sponsor funding'
+                  ) : task.verification_mode === 'automatic' ? (
+                    'Start tracked task'
                   ) : (
-                    <><Zap size={14} /> Do Task</>
+                    <><Zap size={14} /> Submit proof</>
                   )}
                 </button>
               </div>
 
+              {planLocked && !campaignUnavailable && <p className="mt-3 text-xs text-amber-300">Requires the {task.required_plan_code[0].toUpperCase() + task.required_plan_code.slice(1)} plan.</p>}
+              {planLocked && campaignUnavailable && <p className="mt-3 text-xs text-amber-300">Requires {task.required_plan_code} access; this sponsor campaign is also still being configured.</p>}
+              {!planLocked && campaignUnavailable && <p className="mt-3 text-xs text-gray-500">This sponsor campaign is being configured and cannot be claimed yet.</p>}
+
               {done && (
                 <div className="mt-3 flex items-center gap-2 text-xs text-amber-400/70 bg-amber-400/5 rounded-lg px-3 py-2">
                   <Clock size={12} />
-                  Pending admin verification
+                  {completion.status === 'approved' ? 'Task approved and reward credited' : 'Pending admin verification'}
                 </div>
               )}
             </div>

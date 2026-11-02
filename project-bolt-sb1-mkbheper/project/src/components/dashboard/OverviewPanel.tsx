@@ -1,4 +1,5 @@
-import { TrendingUp, Zap, Users, Clock, ArrowUpRight, ChevronRight } from 'lucide-react';
+import { useState } from 'react';
+import { TrendingUp, Zap, Users, Clock, ArrowUpRight, ChevronRight, X } from 'lucide-react';
 import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/supabase';
 
 interface Props {
@@ -39,6 +40,27 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
   const done = completions.filter(c => c.status === 'approved').length;
   const pending = completions.filter(c => c.status === 'pending').length;
   const recentTasks = tasks.slice(0, 4);
+  const today = new Date();
+  const dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
+  const reminderKey = `task-reminder:${profile?.user_id ?? 'member'}:${dateKey}`;
+  const [reminderDismissed, setReminderDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(reminderKey) === 'dismissed';
+    } catch {
+      return false;
+    }
+  });
+  const claimedTaskIds = new Set(completions.filter(completion => completion.status !== 'rejected').map(completion => completion.task_id));
+  const availableTaskCount = tasks.filter(task => !claimedTaskIds.has(task.id)).length;
+
+  function dismissReminder() {
+    setReminderDismissed(true);
+    try {
+      localStorage.setItem(reminderKey, 'dismissed');
+    } catch {
+      // Keep dismissal for this session when storage is unavailable.
+    }
+  }
 
   const tierProgress: Record<string, { current: number; max: number; next: string }> = {
     Bronze:   { current: done,     max: 10,  next: 'Silver' },
@@ -51,6 +73,19 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
 
   return (
     <div className="space-y-6">
+      {availableTaskCount > 0 && !reminderDismissed && (
+        <div className="flex items-center justify-between gap-4 border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+          <div className="min-w-0">
+            <p className="text-sm font-bold text-emerald-300">Your daily task reminder</p>
+            <p className="mt-0.5 text-xs text-gray-400">{availableTaskCount} available task{availableTaskCount === 1 ? '' : 's'} are waiting today.</p>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <button onClick={() => onNavigate('tasks')} className="rounded border border-emerald-300/25 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-300/10">View tasks</button>
+            <button onClick={dismissReminder} aria-label="Dismiss today's task reminder" className="p-2 text-gray-400 hover:text-white"><X size={15} /></button>
+          </div>
+        </div>
+      )}
+
       {/* Welcome banner */}
       <div className="relative bg-gradient-to-r from-amber-400/10 via-orange-500/5 to-transparent border border-amber-400/12 rounded-2xl p-5 overflow-hidden">
         <div className="absolute -right-8 -top-8 w-40 h-40 bg-amber-400/5 rounded-full blur-xl" />

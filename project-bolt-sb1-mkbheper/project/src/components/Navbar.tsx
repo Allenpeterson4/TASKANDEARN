@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
+import ThemeToggle from '@/components/ThemeToggle';
 
 const navLinks = [
   { label: 'Home', href: '#home' },
@@ -10,7 +11,11 @@ const navLinks = [
   { label: 'About Us', href: '#about' },
 ];
 
-export default function Navbar() {
+interface Props {
+  onAuthRequest: (mode: 'login' | 'signup') => void;
+}
+
+export default function Navbar({ onAuthRequest }: Props) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [active, setActive] = useState('home');
@@ -86,11 +91,12 @@ export default function Navbar() {
 
         {/* CTA */}
         <div className="hidden lg:flex items-center gap-3">
-          <button className="px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors">
+          <ThemeToggle />
+          <button onClick={() => onAuthRequest('login')} className="px-4 py-2 text-sm font-semibold text-gray-300 hover:text-white transition-colors">
             Sign In
           </button>
           <button
-            onClick={() => handleNav('#how-it-works')}
+            onClick={() => onAuthRequest('signup')}
             className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 hover:-translate-y-0.5 transition-all duration-200"
           >
             Get Started
@@ -98,13 +104,16 @@ export default function Navbar() {
         </div>
 
         {/* Mobile toggle */}
-        <button
-          onClick={() => setOpen(!open)}
-          className="lg:hidden p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
-          aria-label="Toggle menu"
-        >
-          {open ? <X size={22} /> : <Menu size={22} />}
-        </button>
+        <div className="lg:hidden flex items-center gap-2">
+          <ThemeToggle />
+          <button
+            onClick={() => setOpen(!open)}
+            className="p-2 rounded-lg text-gray-300 hover:text-white hover:bg-white/10 transition-colors"
+            aria-label="Toggle menu"
+          >
+            {open ? <X size={22} /> : <Menu size={22} />}
+          </button>
+        </div>
       </nav>
 
       {/* Mobile menu */}
@@ -131,11 +140,11 @@ export default function Navbar() {
             ))}
           </ul>
           <div className="flex flex-col gap-2">
-            <button className="w-full py-3 rounded-xl border border-white/10 text-gray-300 text-sm font-semibold hover:bg-white/5 transition-colors">
+            <button onClick={() => onAuthRequest('login')} className="w-full py-3 rounded-xl border border-white/10 text-gray-300 text-sm font-semibold hover:bg-white/5 transition-colors">
               Sign In
             </button>
             <button
-              onClick={() => handleNav('#how-it-works')}
+              onClick={() => onAuthRequest('signup')}
               className="w-full py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/30 transition-all"
             >
               Get Started Free
