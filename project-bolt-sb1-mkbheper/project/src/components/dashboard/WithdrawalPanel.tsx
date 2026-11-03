@@ -22,12 +22,12 @@ export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdde
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [minimumWithdrawal, setMinimumWithdrawal] = useState(5000);
-  const [payoutWindow, setPayoutWindow] = useState({ days: [5], start: '14:00', end: '18:00', timezone: 'Africa/Lagos' });
+  const [payoutWindow, setPayoutWindow] = useState({ days: [5], start: '14:00', end: '18:00', timezone: 'Africa/Lagos', enabled: false });
 
   const totalAvailable = (balance?.reward_balance ?? 0) + (balance?.referral_balance ?? 0);
 
   useEffect(() => {
-    supabase.from('payout_settings').select('minimum_amount, payout_days, window_start, window_end, timezone').eq('singleton', true).maybeSingle()
+    supabase.from('payout_settings').select('minimum_amount, payout_days, window_start, window_end, timezone, enabled').eq('singleton', true).maybeSingle()
       .then(({ data }) => {
         if (data) {
           setMinimumWithdrawal(Number(data.minimum_amount));
@@ -36,6 +36,7 @@ export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdde
             start: String(data.window_start).slice(0, 5),
             end: String(data.window_end).slice(0, 5),
             timezone: data.timezone,
+            enabled: data.enabled,
           });
         }
       });
@@ -49,6 +50,10 @@ export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdde
     e.preventDefault();
     setError('');
     setSuccess('');
+    if (!payoutWindow.enabled) {
+      setSuccess(`Withdrawals are processed on ${payoutWindow.days.map(day => weekdayNames[day]).join(', ')} between ${payoutWindow.start} and ${payoutWindow.end} (${payoutWindow.timezone}). The next payout window has not been enabled yet. Keep completing tasks and await the next payout window.`);
+      return;
+    }
     const amt = parseFloat(form.amount);
     if (isNaN(amt) || amt <= 0) return setError('Enter a valid amount.');
     if (amt > totalAvailable) return setError('Insufficient balance for this withdrawal.');
@@ -105,6 +110,7 @@ export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdde
             <p className="text-gray-400 text-xs">Minimum ₦{minimumWithdrawal.toLocaleString()} · {payoutWindow.days.map(day => weekdayNames[day]).join(', ')} {payoutWindow.start}–{payoutWindow.end} ({payoutWindow.timezone})</p>
           </div>
         </div>
+        <div className="mb-5 border border-blue-400/20 bg-blue-400/5 px-4 py-3 text-xs leading-relaxed text-blue-300">Withdrawals are processed only during designated payout windows. {payoutWindow.enabled ? 'The current window is enabled.' : 'The next payout window is awaiting admin enablement.'} Keep completing tasks and await the next payout window.</div>
 
         <form onSubmit={submit} className="space-y-4">
           <div>
@@ -187,7 +193,7 @@ export default function WithdrawalPanel({ balance, withdrawals, onWithdrawalAdde
 
           <button
             type="submit"
-            disabled={loading || totalAvailable < minimumWithdrawal}
+            disabled={loading || !payoutWindow.enabled || totalAvailable < minimumWithdrawal}
             className="w-full py-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-xl hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:translate-y-0 flex items-center justify-center gap-2"
           >
             {loading ? <Loader2 size={16} className="animate-spin" /> : 'Submit Withdrawal Request'}

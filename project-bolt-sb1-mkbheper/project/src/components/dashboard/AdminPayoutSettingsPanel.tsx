@@ -8,6 +8,7 @@ type PayoutSettings = {
   window_start: string;
   window_end: string;
   timezone: string;
+  enabled: boolean;
 };
 
 const weekdays = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -17,6 +18,7 @@ const defaultSettings: PayoutSettings = {
   window_start: '14:00:00',
   window_end: '18:00:00',
   timezone: 'Africa/Lagos',
+  enabled: false,
 };
 
 export default function AdminPayoutSettingsPanel() {
@@ -35,6 +37,7 @@ export default function AdminPayoutSettingsPanel() {
           window_start: data.window_start,
           window_end: data.window_end,
           timezone: data.timezone,
+          enabled: data.enabled,
         });
       }
       setLoading(false);
@@ -82,6 +85,7 @@ export default function AdminPayoutSettingsPanel() {
           <label className="block max-w-sm text-xs text-gray-400">Minimum withdrawal (NGN)
             <input required type="number" min="500" step="500" value={settings.minimum_amount} onChange={event => setSettings({ ...settings, minimum_amount: Number(event.target.value) })} className="admin-input mt-1" />
           </label>
+          <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked })} className="accent-amber-400" /> Enable withdrawal submissions for the configured payout windows</label>
           <fieldset>
             <legend className="mb-2 text-xs text-gray-400">Payout days</legend>
             <div className="flex flex-wrap gap-2">

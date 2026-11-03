@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
+import { Link, useLocation } from 'react-router-dom';
 import ThemeToggle from '@/components/ThemeToggle';
 
 const navLinks = [
-  { label: 'Home', href: '#home' },
-  { label: 'How It Works', href: '#how-it-works' },
-  { label: 'Features', href: '#features' },
-  { label: 'Referral', href: '#referral' },
-  { label: 'FAQ', href: '#faq' },
-  { label: 'About Us', href: '#about' },
+  { label: 'Home', path: '/' },
+  { label: 'How It Works', path: '/how-it-works' },
+  { label: 'Features', path: '/features' },
+  { label: 'Referral', path: '/referral' },
+  { label: 'FAQ', path: '/faq' },
+  { label: 'About Us', path: '/about' },
 ];
 
 interface Props {
@@ -18,7 +19,7 @@ interface Props {
 export default function Navbar({ onAuthRequest }: Props) {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
-  const [active, setActive] = useState('home');
+  const location = useLocation();
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 20);
@@ -26,27 +27,8 @@ export default function Navbar({ onAuthRequest }: Props) {
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
 
-  useEffect(() => {
-    const sections = navLinks.map(l => l.href.replace('#', ''));
-    const observer = new IntersectionObserver(
-      entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) setActive(e.target.id);
-        });
-      },
-      { threshold: 0.4 }
-    );
-    sections.forEach(id => {
-      const el = document.getElementById(id);
-      if (el) observer.observe(el);
-    });
-    return () => observer.disconnect();
-  }, []);
-
-  const handleNav = (href: string) => {
+  const handleNav = () => {
     setOpen(false);
-    const el = document.querySelector(href);
-    el?.scrollIntoView({ behavior: 'smooth' });
   };
 
   return (
@@ -59,32 +41,30 @@ export default function Navbar({ onAuthRequest }: Props) {
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-18 py-4">
         {/* Logo */}
-        <button
-          onClick={() => handleNav('#home')}
-          className="flex items-center gap-3 group"
-        >
+        <Link to="/" onClick={handleNav} className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:shadow-amber-500/40 transition-shadow">
             <span className="text-white font-black text-xl">M</span>
           </div>
           <span className="text-white font-black text-xl tracking-wide">
             Mr<span className="text-amber-400">Hustler</span>
           </span>
-        </button>
+        </Link>
 
         {/* Desktop nav */}
         <ul className="hidden lg:flex items-center gap-1">
           {navLinks.map(link => (
-            <li key={link.href}>
-              <button
-                onClick={() => handleNav(link.href)}
+            <li key={link.path}>
+              <Link
+                to={link.path}
+                onClick={handleNav}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                  active === link.href.replace('#', '')
+                  location.pathname === link.path
                     ? 'text-amber-400 bg-amber-400/10'
                     : 'text-gray-300 hover:text-white hover:bg-white/5'
                 }`}
               >
                 {link.label}
-              </button>
+              </Link>
             </li>
           ))}
         </ul>
@@ -125,17 +105,18 @@ export default function Navbar({ onAuthRequest }: Props) {
         <div className="bg-[#0f0f0f]/98 backdrop-blur-md border-t border-white/5 px-4 pb-6 pt-2">
           <ul className="flex flex-col gap-1 mb-4">
             {navLinks.map(link => (
-              <li key={link.href}>
-                <button
-                  onClick={() => handleNav(link.href)}
+              <li key={link.path}>
+                <Link
+                  to={link.path}
+                  onClick={handleNav}
                   className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium transition-all ${
-                    active === link.href.replace('#', '')
+                    location.pathname === link.path
                       ? 'text-amber-400 bg-amber-400/10'
                       : 'text-gray-300 hover:text-white hover:bg-white/5'
                   }`}
                 >
                   {link.label}
-                </button>
+                </Link>
               </li>
             ))}
           </ul>

@@ -1,4 +1,5 @@
 import { ArrowRight, Twitter, Instagram, Facebook, Youtube } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 const footerLinks = {
   Platform: ['How It Works', 'Features', 'Referral Program', 'Testimonials', 'Pricing'],
@@ -14,11 +15,15 @@ const socials = [
   { icon: Youtube, label: 'YouTube' },
 ];
 
-export default function Footer() {
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
+const sectionRoutes: Record<string, string> = {
+  'How It Works': '/how-it-works',
+  Features: '/features',
+  'Referral Program': '/referral',
+  Testimonials: '/testimonials',
+  'About Us': '/about',
+};
 
+export default function Footer() {
   return (
     <footer className="bg-[#080808] border-t border-white/5">
       {/* CTA Banner */}
@@ -34,19 +39,19 @@ export default function Footer() {
               movement and unlock your true earning potential.
             </p>
             <div className="flex flex-wrap gap-4 justify-center">
-              <button
-                onClick={() => scrollTo('how-it-works')}
+              <Link
+                to="/how-it-works"
                 className="group inline-flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-base hover:shadow-2xl hover:shadow-amber-500/30 hover:-translate-y-1 transition-all duration-300"
               >
                 Create Free Account
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button
-                onClick={() => scrollTo('referral')}
+              </Link>
+              <Link
+                to="/referral"
                 className="px-8 py-4 rounded-2xl border border-white/10 text-white font-semibold text-base hover:bg-white/5 hover:border-white/20 transition-all duration-300"
               >
                 Learn About Referrals
-              </button>
+              </Link>
             </div>
           </div>
         </div>
@@ -90,12 +95,11 @@ export default function Footer() {
               <ul className="space-y-3">
                 {links.map(link => (
                   <li key={link}>
-                    <a
-                      href="#"
-                      className="text-gray-400 hover:text-white text-sm transition-colors"
-                    >
-                      {link}
-                    </a>
+                    {sectionRoutes[link] ? (
+                      <Link to={sectionRoutes[link]} className="text-gray-400 hover:text-white text-sm transition-colors">{link}</Link>
+                    ) : (
+                      <a href="#" className="text-gray-400 hover:text-white text-sm transition-colors">{link}</a>
+                    )}
                   </li>
                 ))}
               </ul>

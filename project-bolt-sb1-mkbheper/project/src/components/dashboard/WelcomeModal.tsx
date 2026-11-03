@@ -3,10 +3,11 @@ import { useEffect, useState } from 'react';
 
 interface Props {
   onClose: () => void;
+  onClaimOffer: () => void;
   fullName?: string;
 }
 
-export default function WelcomeModal({ onClose, fullName }: Props) {
+export default function WelcomeModal({ onClose, onClaimOffer, fullName }: Props) {
   const [visible, setVisible] = useState(false);
 
   useEffect(() => {
@@ -17,6 +18,11 @@ export default function WelcomeModal({ onClose, fullName }: Props) {
   function close() {
     setVisible(false);
     setTimeout(onClose, 300);
+  }
+
+  function claimOffer() {
+    setVisible(false);
+    setTimeout(onClaimOffer, 300);
   }
 
   return (
@@ -113,7 +119,7 @@ export default function WelcomeModal({ onClose, fullName }: Props) {
         {/* CTA */}
         <div className="px-7 pb-7 flex flex-col gap-3">
           <button
-            onClick={close}
+            onClick={claimOffer}
             className="group w-full flex items-center justify-center gap-2 py-3.5 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-xl hover:shadow-amber-500/25 hover:-translate-y-0.5 transition-all"
           >
             Claim Offer — Start Earning

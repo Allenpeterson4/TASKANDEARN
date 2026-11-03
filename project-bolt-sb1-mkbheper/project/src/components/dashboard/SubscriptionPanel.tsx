@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Check, Crown, Loader2, RefreshCw, ShieldCheck } from 'lucide-react';
+import { Check, Crown, Loader2, RefreshCw, ShieldCheck, ArrowRight } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type Plan = {
@@ -10,6 +10,7 @@ type Plan = {
   daily_task_limit: number;
   daily_earning_cap: number | null;
   referral_commission_percent: number;
+  description: string;
   is_active: boolean;
 };
 
@@ -20,19 +21,15 @@ type Subscription = {
   ends_at: string | null;
 };
 
-export default function SubscriptionPanel({ userId }: { userId: string }) {
+export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: string; onSelectPlan: (planCode: string) => void }) {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
-  const [rewardBalance, setRewardBalance] = useState(0);
-  const [referralBalance, setReferralBalance] = useState(0);
-  const [fundingSource, setFundingSource] = useState<'reward' | 'referral' | 'both'>('both');
   const [loading, setLoading] = useState(true);
-  const [purchasePlan, setPurchasePlan] = useState<string | null>(null);
   const [message, setMessage] = useState('');
 
   const loadPlans = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
-    const [planResult, subscriptionResult, balanceResult] = await Promise.all([
+    const [planResult, subscriptionResult] = await Promise.all([
       supabase.from('subscription_plans').select('*').eq('is_active', true).order('price'),
       supabase.from('user_subscriptions')
         .select('plan_code, status, starts_at, ends_at')
@@ -41,14 +38,11 @@ export default function SubscriptionPanel({ userId }: { userId: string }) {
         .order('starts_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
-      supabase.from('balances').select('reward_balance, referral_balance').eq('user_id', userId).maybeSingle(),
     ]);
-    const error = planResult.error ?? subscriptionResult.error ?? balanceResult.error;
+    const error = planResult.error ?? subscriptionResult.error;
     if (error) setMessage(error.message);
     setPlans((planResult.data ?? []) as Plan[]);
     setSubscription(subscriptionResult.data as Subscription | null);
-    setRewardBalance(Number(balanceResult.data?.reward_balance ?? 0));
-    setReferralBalance(Number(balanceResult.data?.referral_balance ?? 0));
     setLoading(false);
   }, [userId]);
 
@@ -62,43 +56,6 @@ export default function SubscriptionPanel({ userId }: { userId: string }) {
       window.removeEventListener('focus', refreshOnFocus);
     };
   }, [loadPlans]);
-
-  async function buyPlan(planCode: string, planPrice: number) {
-    const rewardContribution = fundingSource === 'referral'
-      ? 0
-      : fundingSource === 'reward'
-      ? planPrice
-      : Math.min(rewardBalance, planPrice);
-    const referralContribution = fundingSource === 'reward'
-      ? 0
-      : fundingSource === 'referral'
-      ? planPrice
-      : planPrice - rewardContribution;
-    const totalAvailable = fundingSource === 'reward'
-      ? rewardBalance
-      : fundingSource === 'referral'
-      ? referralBalance
-      : rewardBalance + referralBalance;
-    if (totalAvailable < planPrice) {
-      setMessage(`This plan costs ₦${planPrice.toLocaleString()}. Selected wallet balances total ₦${totalAvailable.toLocaleString()}.`);
-      return;
-    }
-
-    setPurchasePlan(planCode);
-    setMessage('');
-    const { error } = await supabase.rpc('purchase_plan_with_wallet', {
-      p_plan_code: planCode,
-      p_reward_amount: rewardContribution,
-      p_referral_amount: referralContribution,
-    });
-    setPurchasePlan(null);
-    if (error) {
-      setMessage(error.message || 'Could not upgrade this plan.');
-      return;
-    }
-    setMessage('Plan activated using your wallet balances.');
-    await loadPlans();
-  }
 
   return (
     <div className="space-y-6">
@@ -115,11 +72,6 @@ export default function SubscriptionPanel({ userId }: { userId: string }) {
       )}
 
       {message && <div role="status" className="border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">{message}</div>}
-      <div className="grid max-w-2xl gap-4 sm:grid-cols-3">
-        <div className="border border-white/8 bg-white/3 p-4"><p className="text-xs text-gray-400">Reward balance</p><p className="mt-1 font-bold text-white">₦{rewardBalance.toLocaleString('en-NG')}</p></div>
-        <div className="border border-white/8 bg-white/3 p-4"><p className="text-xs text-gray-400">Referral balance</p><p className="mt-1 font-bold text-white">₦{referralBalance.toLocaleString('en-NG')}</p></div>
-        <label className="block text-xs text-gray-400">Upgrade source<select value={fundingSource} onChange={event => setFundingSource(event.target.value as typeof fundingSource)} className="admin-input mt-1"><option value="both">Combine balances</option><option value="reward">Reward only</option><option value="referral">Referral only</option></select></label>
-      </div>
       {loading ? <div className="flex min-h-40 items-center justify-center text-gray-400"><Loader2 className="mr-2 animate-spin" size={17} /> Loading plans</div> : (
         <div className="grid gap-4 md:grid-cols-3">
           {plans.map(plan => {
@@ -131,15 +83,15 @@ export default function SubscriptionPanel({ userId }: { userId: string }) {
                   {plan.plan_code === 'vip' ? <Crown size={18} className="text-amber-400" /> : null}
                 </div>
                 <p className="mt-5 text-2xl font-black text-white">{plan.price === 0 ? 'Free' : `₦${plan.price.toLocaleString()} / month`}</p>
+                <p className="mt-2 text-sm text-gray-400">{plan.description || 'More earning access, higher limits, and better rewards.'}</p>
                 <p className="mt-2 text-sm text-gray-400">{plan.daily_earning_cap === null ? 'No daily earning cap' : `Up to ₦${Number(plan.daily_earning_cap).toLocaleString()} per day`}</p>
                 <p className="mt-1 text-sm text-gray-400">{plan.referral_commission_percent}% referral commission</p>
                 <div className="my-5 flex-1 border-t border-white/8 pt-4 text-xs text-gray-400"><Check size={14} className="mr-2 inline text-green-400" />Limits are enforced on the server</div>
                 {current ? (
                   <button disabled className="w-full rounded-lg border border-white/10 px-4 py-2.5 text-sm text-gray-400">Current plan</button>
                 ) : plan.price > 0 ? (
-                  <button onClick={() => buyPlan(plan.plan_code, Number(plan.price))} disabled={purchasePlan !== null} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">
-                    {purchasePlan === plan.plan_code ? <Loader2 size={15} className="animate-spin" /> : null}
-                    {purchasePlan === plan.plan_code ? 'Applying wallet balance' : 'Upgrade with wallet'}
+                  <button onClick={() => onSelectPlan(plan.plan_code)} className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-amber-400 to-orange-500 px-4 py-2.5 text-sm font-bold text-black">
+                    <ArrowRight size={15} /> Upgrade to {plan.name}
                   </button>
                 ) : null}
               </article>
@@ -149,6 +101,7 @@ export default function SubscriptionPanel({ userId }: { userId: string }) {
         </div>
       )}
       <p className="text-xs text-gray-500">Upgrades are paid from your selected reward and/or referral wallet balances. Your plan activates immediately after successful debit.</p>
+
     </div>
   );
 }

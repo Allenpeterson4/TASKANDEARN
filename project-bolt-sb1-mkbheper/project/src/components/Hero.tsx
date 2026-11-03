@@ -1,4 +1,5 @@
 import { ArrowRight, ChevronDown, Star, Users, Zap, Shield } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useSiteContent } from '@/hooks/useSiteContent';
 
 const stats = [
@@ -11,10 +12,6 @@ const stats = [
 export default function Hero() {
   const content = useSiteContent(['home.hero.title', 'home.hero.description', 'home.hero.image']);
   const titleLines = (content['home.hero.title'] || 'Turn Every\nTask into\nReal Naira').split('\n');
-
-  const scrollTo = (id: string) => {
-    document.getElementById(id)?.scrollIntoView({ behavior: 'smooth' });
-  };
 
   return (
     <section
@@ -80,19 +77,19 @@ export default function Hero() {
 
             {/* CTA buttons */}
             <div className="flex flex-wrap gap-4">
-              <button
-                onClick={() => scrollTo('how-it-works')}
+              <Link
+                to="/how-it-works"
                 className="group flex items-center gap-2 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-base hover:shadow-2xl hover:shadow-amber-500/30 hover:-translate-y-1 transition-all duration-300"
               >
                 Start Earning Now
                 <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-              </button>
-              <button
-                onClick={() => scrollTo('how-it-works')}
+              </Link>
+              <Link
+                to="/how-it-works"
                 className="flex items-center gap-2 px-8 py-4 rounded-2xl border border-white/10 text-white font-semibold text-base hover:bg-white/5 hover:border-white/20 transition-all duration-300"
               >
                 How It Works
-              </button>
+              </Link>
             </div>
           </div>
 
@@ -159,13 +156,13 @@ export default function Hero() {
       </div>
 
       {/* Scroll indicator */}
-      <button
-        onClick={() => scrollTo('how-it-works')}
+      <Link
+        to="/how-it-works"
         className="absolute bottom-8 left-1/2 -translate-x-1/2 flex flex-col items-center gap-1 text-gray-500 hover:text-gray-300 transition-colors animate-bounce"
       >
         <span className="text-xs tracking-widest uppercase">Scroll</span>
         <ChevronDown size={18} />
-      </button>
+      </Link>
     </section>
   );
 }

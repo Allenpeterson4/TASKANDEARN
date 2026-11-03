@@ -10,6 +10,7 @@ type Plan = {
   daily_task_limit: number;
   daily_earning_cap: number | null;
   referral_commission_percent: number;
+  description: string;
   is_active: boolean;
 };
 
@@ -23,6 +24,7 @@ const emptyPlan: PlanDraft = {
   daily_task_limit: 30,
   daily_earning_cap: 4000,
   referral_commission_percent: 5,
+  description: '',
 };
 
 export default function AdminPlansPanel() {
@@ -55,6 +57,7 @@ export default function AdminPlansPanel() {
       daily_task_limit: plan.daily_task_limit,
       daily_earning_cap: plan.daily_earning_cap,
       referral_commission_percent: plan.referral_commission_percent,
+      description: plan.description,
     });
   }
 
@@ -126,6 +129,7 @@ export default function AdminPlansPanel() {
           <div className="flex items-center justify-between"><h2 className="font-bold">{editingCode ? 'Edit plan' : 'Add plan'}</h2>{editingCode && <button type="button" onClick={() => { setEditingCode(null); setDraft(emptyPlan); }} aria-label="Cancel editing" className="text-gray-400 hover:text-white"><X size={16} /></button>}</div>
           <label className="block text-xs text-gray-400">Plan code<input required disabled={!!editingCode} pattern="[a-z0-9_-]{1,40}" value={draft.plan_code} onChange={event => setDraft({ ...draft, plan_code: event.target.value })} placeholder="premium_plus" className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Display name<input required maxLength={100} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="admin-input mt-1" /></label>
+          <label className="block text-xs text-gray-400">Plan description<textarea required maxLength={500} rows={3} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} className="admin-input mt-1 resize-y" placeholder="Explain the benefits and limits included in this plan." /></label>
           <label className="block text-xs text-gray-400">Monthly price (NGN)<input required type="number" min="0" step="0.01" value={draft.price} onChange={event => setDraft({ ...draft, price: Number(event.target.value) })} className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Daily task limit<input required type="number" min="1" max="2147483647" step="1" value={draft.daily_task_limit} onChange={event => setDraft({ ...draft, daily_task_limit: Number(event.target.value) })} className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Daily earnings cap (NGN, blank = none)<input type="number" min="0" step="100" value={draft.daily_earning_cap ?? ''} onChange={event => setDraft({ ...draft, daily_earning_cap: event.target.value === '' ? null : Number(event.target.value) })} className="admin-input mt-1" /></label>

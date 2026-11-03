@@ -10,6 +10,8 @@ import {
   Bell,
   Menu,
   Crown,
+  WalletCards,
+  History,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 
@@ -20,6 +22,9 @@ export type DashTab =
   | 'withdrawal'
   | 'profile'
   | 'plans'
+  | 'payment'
+  | 'history'
+  | 'funding'
   | 'support';
 
 interface Props {
@@ -37,11 +42,13 @@ interface Props {
 const navItems: { id: DashTab; icon: typeof LayoutDashboard; label: string }[] = [
   { id: 'overview',   icon: LayoutDashboard, label: 'Overview' },
   { id: 'tasks',      icon: ClipboardList,   label: 'Tasks' },
+  { id: 'history',    icon: History,         label: 'Task History' },
   { id: 'referral',   icon: Users,           label: 'Referrals' },
   { id: 'withdrawal', icon: CreditCard,      label: 'Withdrawal' },
-  { id: 'profile',    icon: User,            label: 'Profile' },
+  { id: 'funding',    icon: WalletCards,     label: 'Fund Account' },
   { id: 'plans',      icon: Crown,           label: 'Plans' },
   { id: 'support',    icon: HelpCircle,      label: 'Support' },
+  { id: 'profile',    icon: User,            label: 'Profile' },
 ];
 
 const tierColors: Record<string, string> = {
@@ -147,7 +154,7 @@ export default function DashSidebar({
             className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/8 transition-all"
           >
             <LogOut size={17} />
-            Sign Out
+            Sign Out (Logout)
           </button>
         </div>
       </aside>
@@ -171,6 +178,9 @@ export function DashTopbar({
     withdrawal: 'Withdrawal',
     profile:    'My Profile',
     plans:      'Plans & Membership',
+    payment:    'Payment Selection',
+    history:    'Task History',
+    funding:    'Fund Account',
     support:    'Help & Support',
   };
 

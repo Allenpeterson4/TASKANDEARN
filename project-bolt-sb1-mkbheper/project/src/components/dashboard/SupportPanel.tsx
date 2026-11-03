@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { MessageCircle, Mail, Phone, ChevronDown, ChevronUp, Send, Loader2, CheckCircle } from 'lucide-react';
+import { openExternalChat } from '@/lib/externalChat';
 
 const faqs = [
   { q: 'How long does withdrawal take?', a: 'Most withdrawals are processed within 2 hours. During peak periods it may take up to 24 hours.' },
@@ -48,7 +49,7 @@ export default function SupportPanel() {
       <div className="grid sm:grid-cols-3 gap-4">
         {[
           { icon: MessageCircle, label: 'Live Chat', sub: 'Avg. response: 5 min', color: 'text-green-400 bg-green-400/10', action: 'Chat Now' },
-          { icon: Phone, label: 'WhatsApp', sub: 'Mon–Sun, 8am–10pm', color: 'text-emerald-400 bg-emerald-400/10', action: 'Message Us' },
+          { icon: Phone, label: 'Telegram', sub: 'Mon–Sun, 8am–10pm', color: 'text-sky-400 bg-sky-400/10', action: 'Message Us' },
           { icon: Mail, label: 'Email Support', sub: 'Within 24 hours', color: 'text-blue-400 bg-blue-400/10', action: 'Send Email' },
         ].map(ch => {
           const Icon = ch.icon;
@@ -59,7 +60,7 @@ export default function SupportPanel() {
               </div>
               <p className="text-white font-bold text-sm mb-1">{ch.label}</p>
               <p className="text-gray-500 text-xs mb-3">{ch.sub}</p>
-              <button className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-semibold transition-colors">
+              <button onClick={ch.label === 'Live Chat' ? openExternalChat : undefined} className="w-full py-2 rounded-lg bg-white/5 hover:bg-white/10 text-gray-300 text-xs font-semibold transition-colors">
                 {ch.action}
               </button>
             </div>

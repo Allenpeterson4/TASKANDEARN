@@ -11,6 +11,10 @@ import WithdrawalPanel from './WithdrawalPanel';
 import ProfilePanel from './ProfilePanel';
 import SupportPanel from './SupportPanel';
 import SubscriptionPanel from './SubscriptionPanel';
+import FundAccountPanel from './FundAccountPanel';
+import PaymentSelectionPanel from './PaymentSelectionPanel';
+import NotificationsPanel from './NotificationsPanel';
+import TaskHistoryPanel from './TaskHistoryPanel';
 
 interface Props {
   user: User;
@@ -18,8 +22,10 @@ interface Props {
 
 export default function Dashboard({ user }: Props) {
   const [tab, setTab] = useState<DashTab>('overview');
+  const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [profile, setProfile] = useState<Profile | null>(null);
   const [balance, setBalance] = useState<Balance | null>(null);
@@ -27,6 +33,7 @@ export default function Dashboard({ user }: Props) {
   const [completions, setCompletions] = useState<TaskCompletion[]>([]);
   const [referrals, setReferrals] = useState<Referral[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [fundingDeposits, setFundingDeposits] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [currentPlanCode, setCurrentPlanCode] = useState('free');
   const [availablePlanCodes, setAvailablePlanCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,6 +47,7 @@ export default function Dashboard({ user }: Props) {
         { data: comps },
         { data: refs },
         { data: wds },
+        { data: deposits },
         { data: paidPlans },
         { data: activeSubscription },
       ] = await Promise.all([
@@ -49,6 +57,7 @@ export default function Dashboard({ user }: Props) {
         supabase.from('task_completions').select('*').eq('user_id', user.id),
         supabase.from('referrals').select('*').eq('referrer_id', user.id),
         supabase.from('withdrawals').select('*').eq('user_id', user.id).order('requested_at', { ascending: false }),
+        supabase.from('funding_deposits').select('id, amount, status, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
         supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
         supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').gt('ends_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
@@ -58,6 +67,7 @@ export default function Dashboard({ user }: Props) {
       setCompletions(comps ?? []);
       setReferrals(refs ?? []);
       setWithdrawals(wds ?? []);
+      setFundingDeposits(deposits ?? []);
       const activePlanCodes = (paidPlans ?? []).map(plan => plan.plan_code);
       setAvailablePlanCodes(activePlanCodes);
       setCurrentPlanCode(activeSubscription?.plan_code ?? 'free');
@@ -93,6 +103,12 @@ export default function Dashboard({ user }: Props) {
     await supabase.auth.signOut();
   }
 
+  async function transferReferralEarnings() {
+    const { data, error } = await supabase.rpc('transfer_referral_balance');
+    if (error) throw error;
+    if (data) setBalance(data as Balance);
+  }
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
@@ -123,6 +139,7 @@ export default function Dashboard({ user }: Props) {
       {showModal && (
         <WelcomeModal
           onClose={() => setShowModal(false)}
+          onClaimOffer={() => { setShowModal(false); setTab('tasks'); }}
           fullName={profile?.full_name}
         />
       )}
@@ -143,9 +160,10 @@ export default function Dashboard({ user }: Props) {
       <div className="flex-1 lg:ml-64 flex flex-col min-h-screen">
         <DashTopbar
           onMenuClick={() => setSideOpen(true)}
-          onNotif={() => setShowModal(true)}
+          onNotif={() => setShowNotifications(current => !current)}
           tab={tab}
         />
+        {showNotifications && <NotificationsPanel completions={completions} withdrawals={withdrawals} deposits={fundingDeposits} onClose={() => setShowNotifications(false)} />}
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="max-w-5xl mx-auto">
@@ -157,6 +175,7 @@ export default function Dashboard({ user }: Props) {
                 completions={completions}
                 withdrawals={withdrawals}
                 onNavigate={(t) => setTab(t)}
+                onTransferReferral={transferReferralEarnings}
               />
             )}
             {tab === 'tasks' && (
@@ -168,13 +187,16 @@ export default function Dashboard({ user }: Props) {
                 availablePlanCodes={availablePlanCodes}
                 onUpgrade={() => setTab('plans')}
                 onCompletionAdded={(c) => setCompletions(prev => [...prev, c])}
+                onBalanceUpdated={(nextBalance) => setBalance(current => current ? { ...current, ...nextBalance } : current)}
               />
             )}
+            {tab === 'history' && <TaskHistoryPanel tasks={tasks} completions={completions} />}
             {tab === 'referral' && (
               <ReferralPanel
                 profile={profile}
                 balance={balance}
                 referrals={referrals}
+                onBalanceUpdated={(nextBalance) => setBalance(nextBalance)}
               />
             )}
             {tab === 'withdrawal' && (
@@ -191,7 +213,9 @@ export default function Dashboard({ user }: Props) {
                 onProfileUpdated={(p) => setProfile(p)}
               />
             )}
-            {tab === 'plans' && <SubscriptionPanel userId={user.id} />}
+            {tab === 'plans' && <SubscriptionPanel userId={user.id} onSelectPlan={(planCode) => { setSelectedPlanCode(planCode); setTab('payment'); }} />}
+            {tab === 'payment' && selectedPlanCode && <PaymentSelectionPanel planCode={selectedPlanCode} onBack={() => setTab('plans')} />}
+            {tab === 'funding' && <FundAccountPanel userId={user.id} />}
             {tab === 'support' && <SupportPanel />}
           </div>
         </main>

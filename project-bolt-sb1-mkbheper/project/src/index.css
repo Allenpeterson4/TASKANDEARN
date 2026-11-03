@@ -12,7 +12,7 @@
   }
 
   body {
-    @apply bg-[#0a0a0a] text-white antialiased;
+    @apply bg-black text-white antialiased;
     font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   }
 
@@ -78,7 +78,7 @@
 
 :root {
   color-scheme: dark;
-  --page-background: #0a0a0a;
+  --page-background: #000000;
   --surface-background: #111111;
   --text-primary: #f9fafb;
   --text-secondary: #9ca3af;
@@ -131,7 +131,7 @@
 }
 
 :root[data-theme='light'] [class~="text-white"] {
-  color: var(--text-primary) !important;
+  color: #000000 !important;
 }
 
 :root[data-theme='light'] [class~="text-gray-300"] {
@@ -173,7 +173,27 @@
 }
 
 :root[data-theme='light'] [class~="hover:text-white"]:hover {
-  color: var(--text-primary) !important;
+  color: #000000 !important;
+}
+
+:root[data-theme='light'] {
+  --text-primary: #000000;
+}
+
+:root[data-theme='light'] body,
+:root[data-theme='light'] [class*="text-gray-"],
+:root[data-theme='light'] [class*="text-emerald-"],
+:root[data-theme='light'] [class*="text-amber-"],
+:root[data-theme='light'] [class*="text-green-"],
+:root[data-theme='light'] [class*="text-blue-"],
+:root[data-theme='light'] [class*="text-red-"] {
+  color: #000000 !important;
+}
+
+:root:not([data-theme='light']) body,
+:root:not([data-theme='light']) [class*="bg-[#0a0a0a]"],
+:root:not([data-theme='light']) [class*="bg-[#080808]"] {
+  background-color: #000000 !important;
 }
 
 :root[data-theme='light'] [class*="border-white/"] {
@@ -195,5 +215,16 @@
 
 :root[data-theme='light'] [class*="from-amber"] [class~="text-white"],
 :root[data-theme='light'] [class*="from-orange"] [class~="text-white"] {
-  color: #ffffff !important;
+  color: #000000 !important;
+}
+
+:root[data-theme='light'] body * {
+  color: #000000 !important;
+}
+
+:root[data-theme='light'] input::placeholder,
+:root[data-theme='light'] textarea::placeholder,
+:root[data-theme='light'] select::placeholder {
+  color: #000000 !important;
+  opacity: 0.65;
 }

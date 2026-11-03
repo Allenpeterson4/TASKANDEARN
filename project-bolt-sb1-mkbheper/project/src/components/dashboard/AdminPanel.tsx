@@ -22,6 +22,7 @@ import {
   Users,
   X,
   Package,
+  MessageCircle,
 } from 'lucide-react';
 import { supabase, type Profile, type Task, type TaskCompletion, type Withdrawal } from '@/lib/supabase';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -29,8 +30,11 @@ import AdminActivityPanel from './AdminActivityPanel';
 import AdminContentPanel from './AdminContentPanel';
 import AdminPlansPanel from './AdminPlansPanel';
 import AdminPayoutSettingsPanel from './AdminPayoutSettingsPanel';
+import AdminSubscriptionReviewPanel from './AdminSubscriptionReviewPanel';
+import AdminFundingPanel from './AdminFundingPanel';
+import AdminSupportSettingsPanel from './AdminSupportSettingsPanel';
 
-type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'content' | 'plans' | 'activity';
+type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportSettings' | 'content' | 'plans' | 'activity';
 type AccountStatus = 'active' | 'suspended' | 'banned';
 type VerificationMode = 'manual' | 'automatic';
 type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at'> & {
@@ -75,6 +79,9 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'submissions', label: 'Task review', icon: BadgeCheck },
   { id: 'withdrawals', label: 'Withdrawals', icon: CreditCard },
   { id: 'payoutSettings', label: 'Payout schedule', icon: CalendarClock },
+  { id: 'planSubmissions', label: 'Plan approvals', icon: BadgeCheck },
+  { id: 'funding', label: 'Wallet funding', icon: CircleDollarSign },
+  { id: 'supportSettings', label: 'Live chat settings', icon: MessageCircle },
   { id: 'content', label: 'CMS & media', icon: FileText },
   { id: 'plans', label: 'Plans', icon: Package },
   { id: 'activity', label: 'Audit & logins', icon: History },
@@ -608,6 +615,9 @@ export default function AdminPanel({ user }: Props) {
             {section === 'plans' && <AdminPlansPanel />}
             {section === 'activity' && <AdminActivityPanel />}
             {section === 'payoutSettings' && <AdminPayoutSettingsPanel />}
+            {section === 'planSubmissions' && <AdminSubscriptionReviewPanel />}
+            {section === 'funding' && <AdminFundingPanel />}
+            {section === 'supportSettings' && <AdminSupportSettingsPanel />}
           </>
         )}
       </main>

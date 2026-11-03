@@ -1,15 +1,19 @@
 import { useState } from 'react';
 import { Copy, CheckCircle, Users, Gift, TrendingUp, Share2, ExternalLink } from 'lucide-react';
 import type { Profile, Balance, Referral } from '@/lib/supabase';
+import { supabase } from '@/lib/supabase';
 
 interface Props {
   profile: Profile | null;
   balance: Balance | null;
   referrals: Referral[];
+  onBalanceUpdated: (balance: Balance) => void;
 }
 
-export default function ReferralPanel({ profile, balance, referrals }: Props) {
+export default function ReferralPanel({ profile, balance, referrals, onBalanceUpdated }: Props) {
   const [copied, setCopied] = useState(false);
+  const [transferring, setTransferring] = useState(false);
+  const [message, setMessage] = useState('');
   const code = profile?.referral_code ?? 'XXXXXX';
   const link = `${window.location.origin}/?ref=${encodeURIComponent(code)}`;
 
@@ -21,6 +25,19 @@ export default function ReferralPanel({ profile, balance, referrals }: Props) {
 
   const paidCount   = referrals.filter(r => r.bonus_paid).length;
   const totalReferrals = referrals.length;
+
+  async function transferReferralEarnings() {
+    setTransferring(true);
+    setMessage('');
+    const { data, error } = await supabase.rpc('transfer_referral_balance');
+    setTransferring(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    onBalanceUpdated(data as Balance);
+    setMessage('Referral earnings transferred to your reward balance.');
+  }
 
   const tiers = [
     { level: 'Bronze',   min: 1,  max: 4,  label: '1–4 referrals',  color: 'from-amber-700 to-amber-600', badge: 'border-amber-700/30' },
@@ -50,6 +67,8 @@ export default function ReferralPanel({ profile, balance, referrals }: Props) {
           );
         })}
       </div>
+      <button onClick={transferReferralEarnings} disabled={transferring || (balance?.referral_balance ?? 0) <= 0} className="flex w-full items-center justify-center gap-2 rounded-xl border border-blue-400/25 bg-blue-400/10 px-4 py-3 text-sm font-bold text-blue-300 hover:bg-blue-400/15 disabled:opacity-50"><TrendingUp size={15} />{transferring ? 'Transferring...' : 'Transfer referral earnings to main balance'}</button>
+      {message && <p role="status" className="text-center text-xs text-blue-300">{message}</p>}
 
       {/* Referral link card */}
       <div className="bg-[#111] border border-amber-400/12 rounded-2xl p-6">

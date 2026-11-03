@@ -83,6 +83,10 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
   async function saveProfile(e: React.FormEvent) {
     e.preventDefault();
     setMsg('');
+    if (!profile?.user_id) {
+      setMsg('Your profile is not ready yet. Please refresh and try again.');
+      return;
+    }
     setSaving(true);
     try {
       const { data, error } = await supabase
@@ -93,18 +97,24 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
           phone: form.phone,
           public_activity_opt_in: publicPayoutOptIn,
         })
-        .eq('user_id', profile?.user_id)
+        .eq('user_id', profile.user_id)
         .select()
         .single();
       if (error) throw error;
       onProfileUpdated(data as Profile);
       setMsg('Profile updated successfully.');
     } catch (err: unknown) {
-      setMsg(err instanceof Error ? err.message : 'Update failed.');
+      setMsg(getErrorMessage(err, 'Update failed.'));
     } finally {
       setSaving(false);
       setTimeout(() => setMsg(''), 4000);
     }
+  }
+
+  function getErrorMessage(error: unknown, fallback: string) {
+    if (error instanceof Error) return error.message;
+    if (typeof error === 'object' && error !== null && 'message' in error && typeof error.message === 'string') return error.message;
+    return fallback;
   }
 
   async function changePassword(e: React.FormEvent) {

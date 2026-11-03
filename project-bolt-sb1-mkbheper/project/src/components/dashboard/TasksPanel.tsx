@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock } from 'lucide-react';
+import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock, ChevronDown } from 'lucide-react';
 import type { Task, TaskCompletion } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 
@@ -11,16 +11,18 @@ interface Props {
   availablePlanCodes: string[];
   onUpgrade: () => void;
   onCompletionAdded: (c: TaskCompletion) => void;
+  onBalanceUpdated: (balance: { reward_balance: number; referral_balance: number; total_earned: number }) => void;
 }
 
 const planRanks: Record<string, number> = { free: 0, premium: 1, vip: 2 };
 
-export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, onUpgrade, onCompletionAdded }: Props) {
+export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, onUpgrade, onCompletionAdded, onBalanceUpdated }: Props) {
   const [cat, setCat] = useState('All');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [proofs, setProofs] = useState<Record<string, string>>({});
   const [proofFiles, setProofFiles] = useState<Record<string, File | undefined>>({});
+  const [expandedProof, setExpandedProof] = useState<Record<string, boolean>>({});
 
   const taskCompletionMap = new Map(completions.map(completion => [completion.task_id, completion]));
   const categories = ['All', ...new Set(tasks.map(task => task.category))];
@@ -28,6 +30,33 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
   useEffect(() => {
     if (cat !== 'All' && !tasks.some(task => task.category === cat)) setCat('All');
   }, [cat, tasks]);
+
+  useEffect(() => {
+    if (!tasks.some(task => task.verification_mode === 'automatic')) return;
+
+    let active = true;
+    async function refreshVerifiedTask() {
+      const [{ data: latestCompletions }, { data: latestBalance }] = await Promise.all([
+        supabase.from('task_completions').select('*').eq('user_id', userId),
+        supabase.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
+      ]);
+      if (!active) return;
+      const currentIds = new Set(completions.map(completion => completion.id));
+      for (const completion of (latestCompletions ?? []) as TaskCompletion[]) {
+        if (!currentIds.has(completion.id)) onCompletionAdded(completion);
+      }
+      if (latestBalance) onBalanceUpdated(latestBalance);
+    }
+
+    const refresh = () => { void refreshVerifiedTask(); };
+    window.addEventListener('focus', refresh);
+    const timer = window.setInterval(refresh, 10000);
+    return () => {
+      active = false;
+      window.removeEventListener('focus', refresh);
+      window.clearInterval(timer);
+    };
+  }, [completions, onBalanceUpdated, onCompletionAdded, tasks, userId]);
 
   const filtered = tasks.filter(t =>
     cat === 'All' || t.category === cat
@@ -65,9 +94,10 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
       onCompletionAdded(data as TaskCompletion);
       setProofFiles(current => ({ ...current, [task.id]: undefined }));
       showToast(`Task submitted! ₦${task.reward.toLocaleString()} pending verification.`);
-    } catch {
+    } catch (error) {
       if (uploadedPath) await supabase.storage.from('task-proofs').remove([uploadedPath]);
-      showToast('Could not submit task. Please try again.');
+      const message = error instanceof Error ? error.message : 'Unknown submission error';
+      showToast(`Could not submit task: ${message}`);
     } finally {
       setSubmitting(null);
     }
@@ -165,16 +195,19 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
               <h3 className="text-white font-bold text-sm mb-2">{task.title}</h3>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">{task.description}</p>
               {task.task_url && task.is_funded && (
-                <a
-                  href={task.task_url}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300"
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (task.verification_mode === 'automatic') void startTrackedTask(task);
+                    else window.open(task.task_url, '_blank', 'noopener,noreferrer');
+                  }}
+                  disabled={isSubmitting || done}
+                  className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300 disabled:opacity-50"
                 >
-                  Open task <ExternalLink size={13} />
-                </a>
+                  {task.verification_mode === 'automatic' ? 'Start tracked task' : 'Open task'} <ExternalLink size={13} />
+                </button>
               )}
-              {task.verification_mode === 'manual' && !done && !locked && (
+              {task.verification_mode === 'manual' && !done && !locked && expandedProof[task.id] && (
                 <div className="mb-4">
                   <label className="block text-xs text-gray-400 mb-1.5">
                     {task.proof_instructions || 'Describe the completed action or upload a screenshot for manual review.'}
@@ -209,6 +242,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   onClick={() => {
                     if (planLocked) onUpgrade();
                     else if (task.verification_mode === 'automatic') void startTrackedTask(task);
+                    else if (!expandedProof[task.id]) setExpandedProof(current => ({ ...current, [task.id]: true }));
                     else void startTask(task);
                   }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
@@ -228,7 +262,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   ) : task.verification_mode === 'automatic' ? (
                     'Start tracked task'
                   ) : (
-                    <><Zap size={14} /> Submit proof</>
+                    <><Zap size={14} /> Complete Task <ChevronDown size={14} /></>
                   )}
                 </button>
               </div>
