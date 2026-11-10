@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock, ChevronDown } from 'lucide-react';
 import type { Task, TaskCompletion } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
+import CampaignSubmissionPanel from './CampaignSubmissionPanel';
 
 interface Props {
   tasks: Task[];
@@ -9,14 +10,15 @@ interface Props {
   userId: string;
   currentPlanCode: string;
   availablePlanCodes: string[];
+  allowCampaigns: boolean;
   onUpgrade: () => void;
   onCompletionAdded: (c: TaskCompletion) => void;
   onBalanceUpdated: (balance: { reward_balance: number; referral_balance: number; total_earned: number }) => void;
 }
 
-const planRanks: Record<string, number> = { free: 0, premium: 1, vip: 2 };
+const planRanks: Record<string, number> = { free: 0, premium: 1, vip: 2, president: 3 };
 
-export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, onUpgrade, onCompletionAdded, onBalanceUpdated }: Props) {
+export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, allowCampaigns, onUpgrade, onCompletionAdded, onBalanceUpdated }: Props) {
   const [cat, setCat] = useState('All');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [toast, setToast] = useState('');
@@ -70,7 +72,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
     const proofText = proofs[task.id]?.trim() ?? '';
     const proofFile = proofFiles[task.id];
     if (!proofText && !proofFile) {
-      showToast('Add proof text or a screenshot before submitting this task.');
+      showToast('Add proof text or a screenshot before submitting this hustle.');
       return;
     }
     setSubmitting(task.id);
@@ -91,13 +93,24 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
         p_proof_path: uploadedPath,
       });
       if (error) throw error;
-      onCompletionAdded(data as TaskCompletion);
+      const submitted = data as TaskCompletion;
+      const [{ data: reviewed }, { data: currentBalance }] = await Promise.all([
+        supabase.from('task_completions').select('*').eq('id', submitted.id).maybeSingle(),
+        supabase.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
+      ]);
+      const savedCompletion = (reviewed ?? submitted) as TaskCompletion;
+      onCompletionAdded(savedCompletion);
+      if (currentBalance) onBalanceUpdated(currentBalance);
       setProofFiles(current => ({ ...current, [task.id]: undefined }));
-      showToast(`Task submitted! ₦${task.reward.toLocaleString()} pending verification.`);
+      showToast(savedCompletion.status === 'approved'
+        ? `Hustle approved! ₦${task.reward.toLocaleString()} credited.`
+        : savedCompletion.status === 'rejected'
+          ? 'Hustle was automatically rejected. Review its instructions and try again.'
+          : `Hustle submitted! ₦${task.reward.toLocaleString()} pending verification.`);
     } catch (error) {
       if (uploadedPath) await supabase.storage.from('task-proofs').remove([uploadedPath]);
       const message = error instanceof Error ? error.message : 'Unknown submission error';
-      showToast(`Could not submit task: ${message}`);
+      showToast(`Could not submit hustle: ${message}`);
     } finally {
       setSubmitting(null);
     }
@@ -115,7 +128,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
       destination.searchParams.set('tracking_id', session.id);
       window.location.assign(destination.toString());
     } catch (error) {
-      showToast(error instanceof Error ? error.message : 'Could not start task tracking.');
+      showToast(error instanceof Error ? error.message : 'Could not start hustle tracking.');
       setSubmitting(null);
     }
   }
@@ -127,10 +140,11 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
 
   return (
     <div className="space-y-5">
+      {allowCampaigns && <CampaignSubmissionPanel userId={userId} />}
       {/* Toast */}
       {toast && (
         <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-[#1a1a1a] border border-white/10 rounded-2xl px-5 py-3 text-white text-sm shadow-2xl flex items-center gap-3 max-w-sm">
-          <CheckCircle size={16} className="text-green-400 flex-shrink-0" />
+          <CheckCircle size={16} className="text-orange-300 flex-shrink-0" />
           {toast}
         </div>
       )}
@@ -158,13 +172,13 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
         </div>
       </div>
 
-      {/* Tasks count */}
+      {/* Hustle count */}
       <p className="text-gray-400 text-sm">
-        Showing <span className="text-white font-semibold">{filtered.length}</span> tasks ·{' '}
-        <span className="text-green-400">{completedCount} completed</span>
+        Showing <span className="text-white font-semibold">{filtered.length}</span> hustles ·{' '}
+        <span className="text-orange-300">{completedCount} completed</span>
       </p>
 
-      {/* Task grid */}
+      {/* Hustle grid */}
       <div className="grid sm:grid-cols-2 gap-4">
         {filtered.map(task => {
           const completion = taskCompletionMap.get(task.id);
@@ -182,7 +196,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
               key={task.id}
               className={`bg-[#111] border rounded-2xl p-5 transition-all duration-300 ${
                 done
-                  ? 'border-green-500/15 opacity-70'
+                  ? 'border-orange-500/20 opacity-70'
                   : 'border-white/6 hover:border-amber-400/20 hover:-translate-y-0.5'
               }`}
             >
@@ -204,7 +218,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   disabled={isSubmitting || done}
                   className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300 disabled:opacity-50"
                 >
-                  {task.verification_mode === 'automatic' ? 'Start tracked task' : 'Open task'} <ExternalLink size={13} />
+                  {task.verification_mode === 'automatic' ? 'Start tracked hustle' : 'Open hustle'} <ExternalLink size={13} />
                 </button>
               )}
               {task.verification_mode === 'manual' && !done && !locked && expandedProof[task.id] && (
@@ -234,7 +248,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
 
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-400 font-black text-lg">₦{task.reward.toLocaleString()}</p>
+                  <p className="text-orange-300 font-black text-lg">₦{task.reward.toLocaleString()}</p>
                   <p className="text-gray-600 text-xs">Reward</p>
                 </div>
                 <button
@@ -247,7 +261,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   }}
                   className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
                     done || requiredPlanUnavailable || (campaignUnavailable && !planLocked)
-                      ? 'bg-green-500/10 text-green-400 border border-green-500/20 cursor-default'
+                      ? 'bg-white/5 text-white border border-white/15 cursor-default'
                       : 'bg-gradient-to-r from-amber-400 to-orange-500 text-black hover:shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 disabled:opacity-60'
                   }`}
                 >
@@ -260,9 +274,9 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   ) : campaignUnavailable ? (
                     'Awaiting sponsor funding'
                   ) : task.verification_mode === 'automatic' ? (
-                    'Start tracked task'
+                    'Start tracked hustle'
                   ) : (
-                    <><Zap size={14} /> Complete Task <ChevronDown size={14} /></>
+                    <><Zap size={14} /> Complete Hustle <ChevronDown size={14} /></>
                   )}
                 </button>
               </div>
@@ -274,7 +288,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
               {done && (
                 <div className="mt-3 flex items-center gap-2 text-xs text-amber-400/70 bg-amber-400/5 rounded-lg px-3 py-2">
                   <Clock size={12} />
-                  {completion.status === 'approved' ? 'Task approved and reward credited' : 'Pending admin verification'}
+                  {completion.status === 'approved' ? 'Hustle approved and reward credited' : 'Pending admin verification'}
                 </div>
               )}
             </div>
@@ -285,7 +299,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
       {filtered.length === 0 && (
         <div className="text-center py-16 text-gray-500">
           <ClipboardList size={40} className="mx-auto mb-3 opacity-30" />
-          <p>No tasks match your filter.</p>
+          <p>No hustles match your filter.</p>
         </div>
       )}
     </div>

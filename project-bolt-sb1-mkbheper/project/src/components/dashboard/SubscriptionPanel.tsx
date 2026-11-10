@@ -9,6 +9,8 @@ type Plan = {
   currency: string;
   daily_task_limit: number;
   daily_earning_cap: number | null;
+  max_withdrawal: number;
+  billing_period: 'monthly' | 'lifetime';
   referral_commission_percent: number;
   description: string;
   is_active: boolean;
@@ -35,6 +37,7 @@ export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: st
         .select('plan_code, status, starts_at, ends_at')
         .eq('user_id', userId)
         .eq('status', 'active')
+        .or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`)
         .order('starts_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
@@ -60,7 +63,7 @@ export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: st
   return (
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
-        <div><p className="text-xs font-bold uppercase tracking-wider text-amber-400">Membership</p><h2 className="mt-1 text-xl font-black text-white">Plans and task limits</h2></div>
+        <div><p className="text-xs font-bold uppercase tracking-wider text-amber-400">Upgrade tiers</p><h2 className="mt-1 text-xl font-black text-white">Hustler plans and limits</h2></div>
         <button onClick={() => loadPlans()} disabled={loading} className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 disabled:opacity-50"><RefreshCw size={14} /> Refresh status</button>
       </div>
 
@@ -73,17 +76,19 @@ export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: st
 
       {message && <div role="status" className="border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">{message}</div>}
       {loading ? <div className="flex min-h-40 items-center justify-center text-gray-400"><Loader2 className="mr-2 animate-spin" size={17} /> Loading plans</div> : (
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
           {plans.map(plan => {
             const current = plan.plan_code === (subscription?.plan_code ?? 'free');
             return (
               <article key={plan.plan_code} className={`flex flex-col border p-5 ${current ? 'border-amber-400/40 bg-amber-400/5' : 'border-white/10 bg-[#111]'}`}>
                 <div className="flex items-start justify-between gap-3">
-                  <div><h3 className="text-lg font-bold text-white">{plan.name}</h3><p className="mt-1 text-xs text-gray-400">{plan.daily_task_limit >= 2147483647 ? 'Unlimited tasks' : `${plan.daily_task_limit} tasks per day`}</p></div>
-                  {plan.plan_code === 'vip' ? <Crown size={18} className="text-amber-400" /> : null}
+                  <div><h3 className="text-lg font-bold text-white">{plan.name}</h3><p className="mt-1 text-xs text-gray-400">{plan.daily_task_limit >= 2147483647 ? 'Unlimited hustles' : `${plan.daily_task_limit} hustles per day`}</p></div>
+                  {plan.price > 0 ? <Crown size={18} className="text-amber-400" /> : null}
                 </div>
-                <p className="mt-5 text-2xl font-black text-white">{plan.price === 0 ? 'Free' : `₦${plan.price.toLocaleString()} / month`}</p>
+                <p className="mt-5 text-2xl font-black text-white">{plan.price === 0 ? 'Free' : `₦${plan.price.toLocaleString()} / ${plan.billing_period === 'lifetime' ? 'lifetime' : 'month'}`}</p>
                 <p className="mt-2 text-sm text-gray-400">{plan.description || 'More earning access, higher limits, and better rewards.'}</p>
+                <p className="mt-2 text-sm text-gray-400">Maximum withdrawal ₦{Number(plan.max_withdrawal).toLocaleString()}</p>
+                {plan.price > 0 && <p className="mt-2 text-xs leading-relaxed text-orange-200">Premium badge · Priority support · Custom referral code · User transfers</p>}
                 <p className="mt-2 text-sm text-gray-400">{plan.daily_earning_cap === null ? 'No daily earning cap' : `Up to ₦${Number(plan.daily_earning_cap).toLocaleString()} per day`}</p>
                 <p className="mt-1 text-sm text-gray-400">{plan.referral_commission_percent}% referral commission</p>
                 <div className="my-5 flex-1 border-t border-white/8 pt-4 text-xs text-gray-400"><Check size={14} className="mr-2 inline text-green-400" />Limits are enforced on the server</div>
@@ -100,7 +105,7 @@ export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: st
           {plans.length === 0 && <p className="col-span-full py-10 text-center text-sm text-gray-500">Plans are unavailable. Try refreshing.</p>}
         </div>
       )}
-      <p className="text-xs text-gray-500">Upgrades are paid from your selected reward and/or referral wallet balances. Your plan activates immediately after successful debit.</p>
+      <p className="text-xs text-gray-500">Select a payment method to continue. Paid plans activate after payment confirmation or admin review.</p>
 
     </div>
   );

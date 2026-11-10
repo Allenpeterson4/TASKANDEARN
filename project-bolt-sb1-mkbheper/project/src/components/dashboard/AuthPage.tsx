@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandLogo from '@/components/BrandLogo';
 
 type Mode = 'login' | 'signup' | 'reset';
 
@@ -141,12 +142,7 @@ export default function AuthPage({ initialMode = 'login', onBack, adminOnly = fa
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-xl shadow-amber-500/20">
-              <span className="text-white font-black text-2xl">M</span>
-            </div>
-            <span className="text-white font-black text-2xl">Mr<span className="text-amber-400">Hustler</span></span>
-          </div>
+          <BrandLogo className="mb-4 inline-flex items-center gap-3" markClassName="h-12 w-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-xl shadow-amber-500/20" wordmarkClassName="text-white font-black text-2xl" fallbackClassName="text-white font-black text-2xl" />
           <h1 className="text-2xl font-black text-white">
             {adminOnly ? 'Admin sign in' : mode === 'reset' ? 'Reset your password' : mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h1>

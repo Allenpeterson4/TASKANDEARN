@@ -9,6 +9,8 @@ type Plan = {
   currency: string;
   daily_task_limit: number;
   daily_earning_cap: number | null;
+  max_withdrawal: number;
+  billing_period: 'monthly' | 'lifetime';
   referral_commission_percent: number;
   description: string;
   is_active: boolean;
@@ -23,6 +25,8 @@ const emptyPlan: PlanDraft = {
   currency: 'NGN',
   daily_task_limit: 30,
   daily_earning_cap: 4000,
+  max_withdrawal: 500,
+  billing_period: 'monthly',
   referral_commission_percent: 5,
   description: '',
 };
@@ -56,6 +60,8 @@ export default function AdminPlansPanel() {
       currency: plan.currency,
       daily_task_limit: plan.daily_task_limit,
       daily_earning_cap: plan.daily_earning_cap,
+      max_withdrawal: plan.max_withdrawal,
+      billing_period: plan.billing_period,
       referral_commission_percent: plan.referral_commission_percent,
       description: plan.description,
     });
@@ -103,7 +109,7 @@ export default function AdminPlansPanel() {
   return (
     <div className="space-y-6">
       <div className="border-l-2 border-amber-400 pl-4 text-sm text-gray-400">
-        Plan limits are enforced when users claim tasks. Premium activation is intentionally not client-controlled; connect a verified payment-provider webhook before accepting subscriptions.
+        Hustle and withdrawal limits are enforced by Supabase. Premium activation is not client-controlled; paid plans still require verified payment review.
       </div>
       {message && <div role="status" className="flex items-center justify-between gap-3 border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-300">{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><X size={15} /></button></div>}
 
@@ -113,8 +119,8 @@ export default function AdminPlansPanel() {
             <article key={plan.plan_code} className="flex flex-wrap items-center justify-between gap-4 py-4">
               <div>
                 <div className="flex items-center gap-2"><h2 className="font-bold">{plan.name}</h2><span className={`rounded px-2 py-0.5 text-[11px] ${plan.is_active ? 'bg-green-400/10 text-green-300' : 'bg-white/8 text-gray-400'}`}>{plan.is_active ? 'Available' : 'Hidden'}</span></div>
-                <p className="mt-1 text-xs text-gray-400">{plan.plan_code} · {plan.daily_task_limit >= 2147483647 ? 'Unlimited tasks' : `${plan.daily_task_limit} tasks/day`} · {plan.daily_earning_cap === null ? 'No earnings cap' : `₦${Number(plan.daily_earning_cap).toLocaleString()}/day`} · {plan.referral_commission_percent}% referrals</p>
-                <p className="mt-1 text-sm font-semibold text-amber-300">{plan.price === 0 ? 'Free' : `₦${plan.price.toLocaleString()} / month`}</p>
+                <p className="mt-1 text-xs text-gray-400">{plan.plan_code} · {plan.daily_task_limit >= 2147483647 ? 'Unlimited hustles' : `${plan.daily_task_limit} hustles/day`} · Max withdrawal ₦{Number(plan.max_withdrawal).toLocaleString()} · {plan.referral_commission_percent}% referrals</p>
+                <p className="mt-1 text-sm font-semibold text-amber-300">{plan.price === 0 ? 'Free' : `₦${plan.price.toLocaleString()} / ${plan.billing_period === 'lifetime' ? 'lifetime' : 'month'}`}</p>
               </div>
               <div className="flex gap-2">
                 <button onClick={() => edit(plan)} className="rounded border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/5">Edit</button>
@@ -130,8 +136,10 @@ export default function AdminPlansPanel() {
           <label className="block text-xs text-gray-400">Plan code<input required disabled={!!editingCode} pattern="[a-z0-9_-]{1,40}" value={draft.plan_code} onChange={event => setDraft({ ...draft, plan_code: event.target.value })} placeholder="premium_plus" className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Display name<input required maxLength={100} value={draft.name} onChange={event => setDraft({ ...draft, name: event.target.value })} className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Plan description<textarea required maxLength={500} rows={3} value={draft.description} onChange={event => setDraft({ ...draft, description: event.target.value })} className="admin-input mt-1 resize-y" placeholder="Explain the benefits and limits included in this plan." /></label>
-          <label className="block text-xs text-gray-400">Monthly price (NGN)<input required type="number" min="0" step="0.01" value={draft.price} onChange={event => setDraft({ ...draft, price: Number(event.target.value) })} className="admin-input mt-1" /></label>
-          <label className="block text-xs text-gray-400">Daily task limit<input required type="number" min="1" max="2147483647" step="1" value={draft.daily_task_limit} onChange={event => setDraft({ ...draft, daily_task_limit: Number(event.target.value) })} className="admin-input mt-1" /></label>
+          <label className="block text-xs text-gray-400">Price (NGN)<input required type="number" min="0" step="0.01" value={draft.price} onChange={event => setDraft({ ...draft, price: Number(event.target.value) })} className="admin-input mt-1" /></label>
+          <label className="block text-xs text-gray-400">Billing period<select value={draft.billing_period} onChange={event => setDraft({ ...draft, billing_period: event.target.value as PlanDraft['billing_period'] })} className="admin-input mt-1"><option value="monthly">Monthly</option><option value="lifetime">Lifetime</option></select></label>
+          <label className="block text-xs text-gray-400">Daily hustle limit<input required type="number" min="1" max="2147483647" step="1" value={draft.daily_task_limit} onChange={event => setDraft({ ...draft, daily_task_limit: Number(event.target.value) })} className="admin-input mt-1" /></label>
+          <label className="block text-xs text-gray-400">Maximum withdrawal per request (NGN)<input required type="number" min="0" step="100" value={draft.max_withdrawal} onChange={event => setDraft({ ...draft, max_withdrawal: Number(event.target.value) })} className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Daily earnings cap (NGN, blank = none)<input type="number" min="0" step="100" value={draft.daily_earning_cap ?? ''} onChange={event => setDraft({ ...draft, daily_earning_cap: event.target.value === '' ? null : Number(event.target.value) })} className="admin-input mt-1" /></label>
           <label className="block text-xs text-gray-400">Referral commission (%)<input required type="number" min="0" max="100" step="0.01" value={draft.referral_commission_percent} onChange={event => setDraft({ ...draft, referral_commission_percent: Number(event.target.value) })} className="admin-input mt-1" /></label>
           <button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-amber-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : editingCode ? <Check size={15} /> : <Plus size={15} />}{editingCode ? 'Save plan' : 'Create plan'}</button>

@@ -12,9 +12,9 @@ import {
 const features = [
   {
     icon: Zap,
-    title: 'Instant Task Matching',
+    title: 'Instant Hustle Matching',
     description:
-      'Our smart algorithm serves you tasks perfectly matched to your profile and earning potential in real time.',
+      'Our smart algorithm serves you hustles matched to your profile and earning potential in real time.',
     color: 'text-amber-400',
     bg: 'bg-amber-400/10',
   },
@@ -46,7 +46,7 @@ const features = [
     icon: TrendingUp,
     title: 'Scaling Rewards',
     description:
-      'The more you engage and refer, the higher your earning tier. Loyal hustlers unlock premium, high-value tasks.',
+      'The more you engage and refer, the higher your earning tier. Loyal hustlers unlock premium, high-value hustles.',
     color: 'text-orange-400',
     bg: 'bg-orange-400/10',
   },
@@ -132,17 +132,17 @@ export default function Features() {
                 <span className="text-amber-400">for Nigerians</span>
               </h3>
               <p className="text-gray-400 leading-relaxed">
-                Every feature, every payout method, every task category — designed
+                Every feature, every payout method, every hustle category — designed
                 with the Nigerian hustler in mind. We understand your realities
                 and have built a platform that works for you, not against you.
               </p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               {[
-                { label: 'Tasks Available', value: '500+' },
+                { label: 'Hustles Available', value: '500+' },
                 { label: 'Daily Earners', value: '15K+' },
                 { label: 'Avg. Payout Time', value: '< 2 hrs' },
-                { label: 'Task Categories', value: '20+' },
+                { label: 'Hustle Categories', value: '20+' },
               ].map(item => (
                 <div
                   key={item.label}

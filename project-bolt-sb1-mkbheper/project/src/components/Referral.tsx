@@ -24,7 +24,7 @@ const tiers = [
     level: 'Gold',
     refs: '20–49 referrals',
     perRef: 'Premium Bonus',
-    extras: '+ Priority task access',
+    extras: '+ Priority hustle access',
     color: 'from-amber-400 to-yellow-300',
     glow: 'shadow-amber-400/30',
     border: 'border-amber-400/40',
@@ -126,7 +126,7 @@ export default function Referral() {
             <div className="space-y-4">
               {[
                 { icon: Users, text: 'Earn a bonus for every friend who signs up through your link' },
-                { icon: TrendingUp, text: 'Earn passive income on every task your referral completes' },
+                { icon: TrendingUp, text: 'Earn rewards as every referral completes hustles' },
                 { icon: Gift, text: 'Unlock higher referral bonus tiers as your network grows' },
                 { icon: CheckCircle, text: 'No cap on how many friends you can refer' },
               ].map(({ icon: Icon, text }) => (

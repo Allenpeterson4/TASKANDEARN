@@ -23,6 +23,7 @@ export type Profile = {
   account_status?: 'active' | 'suspended' | 'banned';
   status_reason?: string | null;
   public_activity_opt_in?: boolean;
+  leaderboard_opt_in?: boolean;
 };
 
 export type Balance = {
@@ -30,6 +31,7 @@ export type Balance = {
   user_id: string;
   reward_balance: number;
   referral_balance: number;
+  fund_balance: number;
   total_earned: number;
   updated_at: string;
 };
@@ -79,6 +81,7 @@ export type Withdrawal = {
   id: string;
   user_id: string;
   amount: number;
+  wallet_type?: 'hustler' | 'referral';
   bank_name: string;
   account_no: string;
   account_name: string;

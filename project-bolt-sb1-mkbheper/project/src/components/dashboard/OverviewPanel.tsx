@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
-import { TrendingUp, Zap, Users, Clock, ArrowUpRight, ChevronRight, X, BarChart3, ArrowRightLeft, Loader2 } from 'lucide-react';
+import { Zap, Clock, ArrowUpRight, ChevronRight, X, BarChart3 } from 'lucide-react';
 import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/supabase';
+import DailyCheckinCard from './DailyCheckinCard';
 
 interface Props {
   profile: Profile | null;
@@ -8,79 +9,38 @@ interface Props {
   tasks: Task[];
   completions: TaskCompletion[];
   withdrawals: Withdrawal[];
-  onNavigate: (tab: 'tasks' | 'referral' | 'withdrawal' | 'plans' | 'funding') => void;
-  onTransferReferral: () => Promise<void>;
+  userId: string;
+  onNavigate: (tab: 'tasks' | 'referral' | 'wallet' | 'plans') => void;
+  onBalanceUpdated: (balance: Balance) => void;
 }
 
-function BalanceCard({
-  label, value, icon, color, sub, actions,
-}: {
-  label: string;
-  value: number;
-  icon: React.ReactNode;
-  color: string;
-  sub?: string;
-  actions?: React.ReactNode;
-}) {
-  return (
-    <div className={`relative bg-[#111] border rounded-2xl p-5 overflow-hidden border-white/6 hover:border-white/10 transition-all duration-300`}>
-      <div className={`absolute -top-6 -right-6 w-20 h-20 ${color} rounded-full blur-xl opacity-30`} />
-      <div className="flex items-start justify-between mb-4">
-        <div className={`w-10 h-10 rounded-xl ${color} bg-opacity-15 flex items-center justify-center`}>
-          {icon}
-        </div>
-        <TrendingUp size={14} className="text-green-400 opacity-60" />
-      </div>
-      <p className="text-gray-400 text-xs mb-1">{label}</p>
-      <p className="text-white text-2xl font-black">₦{value.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
-      {sub && <p className="text-gray-500 text-xs mt-1">{sub}</p>}
-      {actions}
-    </div>
-  );
-}
-
-export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, onNavigate, onTransferReferral }: Props) {
-  const greetings = [
+export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, userId, onNavigate, onBalanceUpdated }: Props) {
+  const quotes = [
     'Your consistency is building real momentum.',
-    'Small tasks today can create a stronger tomorrow.',
+    'Small hustles today can create a stronger tomorrow.',
     'You are closer to your next milestone than you think.',
-    'Every verified task is a step toward your goals.',
+    'Every verified hustle is a step toward your goals.',
     'Your effort is adding up. Keep the streak alive.',
-    'There is more earning potential waiting in your task list.',
+    'There is more earning potential waiting in your hustle list.',
     'Progress looks good on you. Keep moving forward.',
-    'Your next win could be one completed task away.',
+    'Your next win could be one completed hustle away.',
     'Smart effort compounds. Make today count.',
     'You showed up. Now turn that energy into earnings.',
   ];
-  const [greetingIndex, setGreetingIndex] = useState(0);
+  const [quoteIndex, setQuoteIndex] = useState(0);
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-  const [transferring, setTransferring] = useState(false);
-  const [transferMessage, setTransferMessage] = useState('');
 
   useEffect(() => {
-    const timer = window.setInterval(() => setGreetingIndex(current => (current + 1) % greetings.length), 5000);
+    const timer = window.setInterval(() => setQuoteIndex(current => (current + 1) % quotes.length), 5000);
     return () => window.clearInterval(timer);
-  }, [greetings.length]);
-
-  async function transferReferralEarnings() {
-    setTransferring(true);
-    setTransferMessage('');
-    try {
-      await onTransferReferral();
-      setTransferMessage('Transferred to reward balance.');
-    } catch (error) {
-      setTransferMessage(error instanceof Error ? error.message : 'Transfer failed.');
-    } finally {
-      setTransferring(false);
-    }
-  }
+  }, [quotes.length]);
 
   const done = completions.filter(c => c.status === 'approved').length;
   const pending = completions.filter(c => c.status === 'pending').length;
   const recentTasks = tasks.slice(0, 4);
   const today = new Date();
   const dateKey = `${today.getFullYear()}-${today.getMonth() + 1}-${today.getDate()}`;
-  const reminderKey = `task-reminder:${profile?.user_id ?? 'member'}:${dateKey}`;
+  const reminderKey = `hustle-reminder:${profile?.user_id ?? 'hustler'}:${dateKey}`;
   const [reminderDismissed, setReminderDismissed] = useState(() => {
     try {
       return localStorage.getItem(reminderKey) === 'dismissed';
@@ -90,6 +50,11 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
   });
   const claimedTaskIds = new Set(completions.filter(completion => completion.status !== 'rejected').map(completion => completion.task_id));
   const availableTaskCount = tasks.filter(task => !claimedTaskIds.has(task.id)).length;
+  const availableBalance = (balance?.reward_balance ?? 0) + (balance?.referral_balance ?? 0);
+  const hour = new Date().getHours();
+  const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
+  const firstName = profile?.full_name?.split(' ')[0] || profile?.username || 'Hustler';
+  const hustleBadge = done >= 1000 ? 'President' : done >= 500 ? 'Odogwu Hustler' : done >= 100 ? 'Oga Hustler' : done >= 50 ? 'Street Hustler' : done >= 25 ? 'Pako Hustler' : done >= 10 ? 'Nepo Hustler' : 'Baby Hustler';
 
   function dismissReminder() {
     setReminderDismissed(true);
@@ -111,70 +76,51 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
 
   return (
     <div className="space-y-6">
+      <section className="flex items-center gap-4" aria-label="Personal greeting">
+        {profile?.avatar_url ? <img src={profile.avatar_url} alt="" className="h-12 w-12 rounded-full border border-white/10 object-cover" /> : <div className="flex h-12 w-12 items-center justify-center rounded-full border border-amber-300/25 bg-amber-300/10 text-sm font-bold text-amber-200">{firstName.slice(0, 1).toUpperCase()}</div>}
+        <div>
+          <h2 className="text-lg font-bold text-white">{timeGreeting}, {firstName}</h2>
+          <p className="mt-0.5 text-sm text-gray-400">{done > 0 ? `You have ${done} completed hustle${done === 1 ? '' : 's'}. Keep moving.` : 'Complete your first hustle and start earning today.'}</p>
+        </div>
+      </section>
+
+      <div className="flex min-h-10 items-center border-l-2 border-amber-400/70 bg-white/[0.025] px-4 py-2">
+        <p className="text-xs leading-relaxed text-gray-400">{quotes[quoteIndex]}</p>
+      </div>
+
+      <section className="relative isolate overflow-hidden border border-amber-400/20 bg-gradient-to-br from-amber-400/10 via-transparent to-orange-500/5 p-6 sm:p-8" aria-label="Hustler wallet balance">
+        <span aria-hidden="true" className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2 select-none text-[170px] font-black leading-none text-white/[0.035] sm:text-[210px]">M</span>
+        <div className="relative flex flex-wrap items-end justify-between gap-5">
+          <div>
+            <p className="text-xs font-bold uppercase text-amber-300">Hustler wallet</p>
+            <p className="mt-2 text-4xl font-black leading-none text-white sm:text-5xl">₦{availableBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
+            <p className="mt-3 text-xs text-gray-400">Hustles ₦{(balance?.reward_balance ?? 0).toLocaleString('en-NG')} <span className="mx-1 text-gray-600">·</span> Referrals ₦{(balance?.referral_balance ?? 0).toLocaleString('en-NG')} <span className="mx-1 text-gray-600">·</span> Lifetime ₦{(balance?.total_earned ?? 0).toLocaleString('en-NG')}</p>
+          </div>
+          <button onClick={() => onNavigate('wallet')} className="border border-amber-300/40 px-4 py-2.5 text-sm font-bold text-amber-200 hover:bg-amber-300/10">Open wallet</button>
+        </div>
+      </section>
+
       {availableTaskCount > 0 && !reminderDismissed && (
-        <div className="flex items-center justify-between gap-4 border border-emerald-400/20 bg-emerald-400/5 px-4 py-3">
+        <div className="flex items-center justify-between gap-4 border border-orange-400/20 bg-orange-400/5 px-4 py-3">
           <div className="min-w-0">
-            <p className="text-sm font-bold text-emerald-300">Your daily task reminder</p>
-            <p className="mt-0.5 text-xs text-gray-400">{availableTaskCount} available task{availableTaskCount === 1 ? '' : 's'} are waiting today.</p>
+            <p className="text-sm font-bold text-orange-200">Your daily hustle reminder</p>
+            <p className="mt-0.5 text-xs text-gray-400">{availableTaskCount} available hustle{availableTaskCount === 1 ? '' : 's'} are waiting today.</p>
           </div>
           <div className="flex shrink-0 items-center gap-2">
-            <button onClick={() => onNavigate('tasks')} className="rounded border border-emerald-300/25 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-300/10">View tasks</button>
-            <button onClick={dismissReminder} aria-label="Dismiss today's task reminder" className="p-2 text-gray-400 hover:text-white"><X size={15} /></button>
+            <button onClick={() => onNavigate('tasks')} className="border border-orange-300/30 px-3 py-2 text-xs font-semibold text-orange-200 hover:bg-orange-300/10">View hustles</button>
+            <button onClick={dismissReminder} aria-label="Dismiss today's hustle reminder" className="p-2 text-gray-400 hover:text-white"><X size={15} /></button>
           </div>
         </div>
       )}
 
-      {/* Welcome banner */}
-      <div className="relative bg-gradient-to-r from-amber-400/10 via-orange-500/5 to-transparent border border-amber-400/12 rounded-2xl p-5 overflow-hidden">
-        <div className="absolute -right-8 -top-8 w-40 h-40 bg-amber-400/5 rounded-full blur-xl" />
-        <div className="relative">
-          <p className="text-amber-400 text-xs font-bold uppercase tracking-wider mb-1">
-            Hello, {profile?.full_name?.split(' ')[0] || 'Hustler'} 👋
-          </p>
-          <h2 className="dashboard-greeting text-xl font-black mb-1">
-            {greetings[greetingIndex]}
-          </h2>
-          <p className="text-gray-400 text-sm">
-            {done > 0
-              ? `You've completed ${done} task${done > 1 ? 's' : ''}. Keep going!`
-              : 'Complete your first task and start earning real Naira today.'}
-          </p>
-        </div>
-      </div>
-
-      {/* Balance cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <BalanceCard
-          label="Reward Balance"
-          value={balance?.reward_balance ?? 0}
-          icon={<Zap size={18} className="text-amber-400" />}
-          color="bg-amber-400"
-          sub="From completed tasks"
-          actions={<div className="mt-4 flex gap-2"><button onClick={() => onNavigate('withdrawal')} className="flex-1 rounded-lg border border-amber-400/25 px-2 py-2 text-[11px] font-bold text-amber-300 hover:bg-amber-400/10">Withdraw</button><button onClick={() => onNavigate('funding')} className="flex-1 rounded-lg bg-amber-400 px-2 py-2 text-[11px] font-bold text-black hover:bg-amber-300">Fund Account</button></div>}
-        />
-        <BalanceCard
-          label="Referral Balance"
-          value={balance?.referral_balance ?? 0}
-          icon={<Users size={18} className="text-green-400" />}
-          color="bg-green-400"
-          sub="From referred members"
-          actions={<><button onClick={transferReferralEarnings} disabled={transferring || (balance?.referral_balance ?? 0) <= 0} className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-green-400/25 px-2 py-2 text-[11px] font-bold text-green-300 hover:bg-green-400/10 disabled:opacity-50">{transferring ? <Loader2 size={13} className="animate-spin" /> : <ArrowRightLeft size={13} />}{transferring ? 'Transferring...' : 'Transfer Earnings'}</button>{transferMessage && <p className="mt-2 text-[10px] text-green-300">{transferMessage}</p>}</>}
-        />
-        <BalanceCard
-          label="Total Earned"
-          value={balance?.total_earned ?? 0}
-          icon={<TrendingUp size={18} className="text-blue-400" />}
-          color="bg-blue-400"
-          sub="All-time earnings"
-        />
-      </div>
+      <DailyCheckinCard userId={userId} firstName={firstName} badge={hustleBadge} onBalanceUpdated={onBalanceUpdated} />
 
       <PerformanceChart completions={completions} period={chartPeriod} onPeriodChange={setChartPeriod} />
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
         {[
-          { label: 'Tasks Done', value: done, icon: '✅' },
+          { label: 'Hustles Done', value: done, icon: '✅' },
           { label: 'Pending', value: pending, icon: '⏳' },
           { label: 'Withdrawals', value: withdrawals.length, icon: '💸' },
           { label: 'Tier', value: profile?.tier ?? 'Bronze', icon: '🏅' },
@@ -203,14 +149,14 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
           />
         </div>
         <p className="text-gray-500 text-xs mt-2">
-          Complete {Math.max(0, tp.max - Math.max(0, tp.current))} more tasks to reach {tp.next}
+          Complete {Math.max(0, tp.max - Math.max(0, tp.current))} more hustles to reach {tp.next}
         </p>
       </div>
 
-      {/* Available tasks preview */}
+      {/* Available hustles preview */}
       <div className="bg-[#111] border border-white/6 rounded-2xl overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
-          <h3 className="text-white font-bold text-sm">Available Tasks</h3>
+          <h3 className="text-white font-bold text-sm">Available Hustles</h3>
           <button
             onClick={() => onNavigate('tasks')}
             className="flex items-center gap-1 text-amber-400 text-xs font-semibold hover:text-amber-300 transition-colors"
@@ -248,7 +194,7 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
           <div className="flex items-center justify-between px-5 py-4 border-b border-white/5">
             <h3 className="text-white font-bold text-sm">Recent Withdrawals</h3>
             <button
-              onClick={() => onNavigate('withdrawal')}
+              onClick={() => onNavigate('wallet')}
               className="flex items-center gap-1 text-amber-400 text-xs font-semibold hover:text-amber-300 transition-colors"
             >
               See all <ChevronRight size={14} />
@@ -312,7 +258,7 @@ function PerformanceChart({ completions, period, onPeriodChange }: { completions
   return (
     <div className="bg-[#111] border border-white/6 rounded-2xl p-5">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-blue-400/10 flex items-center justify-center"><BarChart3 size={17} className="text-blue-400" /></div><div><h3 className="text-white font-bold text-sm">Task performance</h3><p className="text-gray-500 text-xs">Completed tasks over time</p></div></div>
+        <div className="flex items-center gap-3"><div className="w-9 h-9 rounded-xl bg-blue-400/10 flex items-center justify-center"><BarChart3 size={17} className="text-blue-400" /></div><div><h3 className="text-white font-bold text-sm">Hustle performance</h3><p className="text-gray-500 text-xs">Completed hustles over time</p></div></div>
         <div className="flex rounded-lg border border-white/8 p-1">{(['daily', 'weekly', 'monthly'] as const).map(value => <button key={value} onClick={() => onPeriodChange(value)} className={`px-2.5 py-1.5 rounded-md text-[11px] font-semibold capitalize ${period === value ? 'bg-blue-400 text-black' : 'text-gray-400 hover:text-white'}`}>{value}</button>)}</div>
       </div>
       <div className="flex h-36 items-end gap-2 sm:gap-4">

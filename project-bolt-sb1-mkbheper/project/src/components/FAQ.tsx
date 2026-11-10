@@ -6,7 +6,7 @@ const faqs = [
   {
     question: 'What is MrHustler and how does it work?',
     answer:
-      'MrHustler is a Nigerian-focused online earning platform where you complete tasks — like surveys, social media actions, app downloads, and referrals — and get paid directly in Naira. Simply sign up, pick available tasks, complete them, and request a withdrawal.',
+      'MrHustler is a Nigerian-focused online earning platform where you complete hustles — like surveys, social media actions, app downloads, and referrals — and get paid directly in Naira. Simply sign up, choose available hustles, complete them, and request a withdrawal.',
   },
   {
     question: 'Is MrHustler free to join?',
@@ -26,12 +26,12 @@ const faqs = [
   {
     question: 'How does the referral program work?',
     answer:
-      'You get a unique referral link when you sign up. Share it with friends — when they sign up and complete their first task, both of you receive a bonus. You also earn a percentage of what your referrals earn over time, creating a passive income stream.',
+      'You get a unique referral link when you sign up. Share it with friends — when they sign up and complete their first hustle, you receive the configured referral bonus. You also earn rewards as your referrals complete hustles.',
   },
   {
-    question: 'What types of tasks are available?',
+    question: 'What types of hustles are available?',
     answer:
-      'Tasks include online surveys, social media engagement (likes, follows, shares), app downloads and reviews, data entry, video watching, website visits, account registrations, and much more. New tasks are added daily.',
+      'Hustles include online surveys, social media engagement (likes, follows, shares), app downloads and reviews, data entry, video watching, website visits, account registrations, and much more. New hustles are added daily.',
   },
   {
     question: 'Can I use MrHustler on my phone?',
@@ -44,9 +44,9 @@ const faqs = [
       'We take security very seriously. All data is encrypted using industry-standard SSL. We never sell your personal information to third parties, and your bank details are protected by bank-grade encryption.',
   },
   {
-    question: 'What if a task I completed was not credited?',
+    question: 'What if a hustle I completed was not credited?',
     answer:
-      'Our 24/7 support team is always available via live chat, email, or WhatsApp. Simply provide your task details and we will investigate and resolve it within the shortest possible time.',
+      'Our support team is available via live chat, email, or WhatsApp. Share the hustle details and we will investigate.',
   },
   {
     question: 'Are there any age restrictions?',

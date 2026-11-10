@@ -7,13 +7,18 @@ interface Props {
   profile: Profile | null;
   balance: Balance | null;
   referrals: Referral[];
+  isPremium: boolean;
+  allowCustomReferralCode: boolean;
+  onProfileUpdated: (profile: Profile) => void;
   onBalanceUpdated: (balance: Balance) => void;
 }
 
-export default function ReferralPanel({ profile, balance, referrals, onBalanceUpdated }: Props) {
+export default function ReferralPanel({ profile, balance, referrals, isPremium, allowCustomReferralCode, onProfileUpdated, onBalanceUpdated }: Props) {
   const [copied, setCopied] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [message, setMessage] = useState('');
+  const [customCode, setCustomCode] = useState(profile?.referral_code ?? '');
+  const [savingCode, setSavingCode] = useState(false);
   const code = profile?.referral_code ?? 'XXXXXX';
   const link = `${window.location.origin}/?ref=${encodeURIComponent(code)}`;
 
@@ -26,6 +31,20 @@ export default function ReferralPanel({ profile, balance, referrals, onBalanceUp
   const paidCount   = referrals.filter(r => r.bonus_paid).length;
   const totalReferrals = referrals.length;
 
+  async function saveCustomCode(event: React.FormEvent) {
+    event.preventDefault();
+    setSavingCode(true);
+    const { data, error } = await supabase.rpc('set_custom_referral_code', { p_code: customCode });
+    setSavingCode(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    if (profile) onProfileUpdated({ ...profile, referral_code: String(data) });
+    setCustomCode(String(data));
+    setMessage('Custom referral code saved.');
+  }
+
   async function transferReferralEarnings() {
     setTransferring(true);
     setMessage('');
@@ -36,7 +55,7 @@ export default function ReferralPanel({ profile, balance, referrals, onBalanceUp
       return;
     }
     onBalanceUpdated(data as Balance);
-    setMessage('Referral earnings transferred to your reward balance.');
+    setMessage('Referral earnings transferred to your Hustler Wallet.');
   }
 
   const tiers = [
@@ -78,7 +97,7 @@ export default function ReferralPanel({ profile, balance, referrals, onBalanceUp
           </div>
           <div>
             <p className="text-white font-bold text-sm">Your Referral Link</p>
-            <p className="text-gray-400 text-xs">Share this link to earn for every signup</p>
+            <p className="text-gray-400 text-xs">Share this link to earn for verified signups and completed hustles</p>
           </div>
         </div>
 
@@ -108,6 +127,8 @@ export default function ReferralPanel({ profile, balance, referrals, onBalanceUp
           </div>
         </div>
 
+        {isPremium && allowCustomReferralCode && <form onSubmit={saveCustomCode} className="mb-5 flex flex-wrap items-end gap-2"><label className="min-w-48 flex-1 text-xs text-gray-400">Custom referral code<input required minLength={4} maxLength={16} pattern="[A-Za-z0-9]{4,16}" value={customCode} onChange={event => setCustomCode(event.target.value)} className="mt-1 w-full border border-white/8 bg-[#0a0a0a] px-3 py-2 text-sm text-white" /></label><button disabled={savingCode} className="border border-orange-300/30 px-3 py-2 text-xs font-bold text-orange-200 disabled:opacity-50">{savingCode ? 'Saving…' : 'Save code'}</button></form>}
+
         {/* Share buttons */}
         <p className="text-gray-500 text-xs mb-2">Share via:</p>
         <div className="grid grid-cols-4 gap-2">
@@ -130,8 +151,8 @@ export default function ReferralPanel({ profile, balance, referrals, onBalanceUp
           {[
             { step: '1', text: 'Copy and share your unique referral link via WhatsApp, social media, or anywhere.' },
             { step: '2', text: 'Your friend signs up using your link and creates a verified account.' },
-            { step: '3', text: 'When they complete their first task, you both receive a welcome bonus.' },
-            { step: '4', text: 'You continue earning a percentage every time your referral completes tasks.' },
+            { step: '3', text: 'When they complete their first hustle, you receive the configured referral bonus.' },
+            { step: '4', text: 'You continue earning referral rewards as your invite completes hustles.' },
           ].map(s => (
             <div key={s.step} className="flex gap-4">
               <div className="w-7 h-7 rounded-full bg-amber-400/15 border border-amber-400/25 flex items-center justify-center flex-shrink-0">

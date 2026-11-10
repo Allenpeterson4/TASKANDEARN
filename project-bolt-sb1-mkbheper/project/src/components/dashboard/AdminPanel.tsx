@@ -23,6 +23,11 @@ import {
   X,
   Package,
   MessageCircle,
+  Image,
+  SlidersHorizontal,
+  ChevronUp,
+  ChevronDown,
+  Megaphone,
 } from 'lucide-react';
 import { supabase, type Profile, type Task, type TaskCompletion, type Withdrawal } from '@/lib/supabase';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -33,16 +38,32 @@ import AdminPayoutSettingsPanel from './AdminPayoutSettingsPanel';
 import AdminSubscriptionReviewPanel from './AdminSubscriptionReviewPanel';
 import AdminFundingPanel from './AdminFundingPanel';
 import AdminSupportSettingsPanel from './AdminSupportSettingsPanel';
+import AdminMetricsPanel from './AdminMetricsPanel';
+import AdminAdBannerPanel from './AdminAdBannerPanel';
+import AdminPlatformSettingsPanel from './AdminPlatformSettingsPanel';
+import AdminCampaignPanel from './AdminCampaignPanel';
+import AdminAnnouncementPanel from './AdminAnnouncementPanel';
+import AdminBrandingPanel from './AdminBrandingPanel';
 
-type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportSettings' | 'content' | 'plans' | 'activity';
+type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding';
 type AccountStatus = 'active' | 'suspended' | 'banned';
 type VerificationMode = 'manual' | 'automatic';
 type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at'> & {
   account_status: AccountStatus;
   status_reason: string | null;
 };
-type AdminBalance = { user_id: string; reward_balance: number; referral_balance: number; total_earned: number };
+type AdminBalance = { user_id: string; reward_balance: number; referral_balance: number; fund_balance: number; total_earned: number };
 type AdminCompletion = TaskCompletion & { task?: Pick<Task, 'title' | 'reward'> };
+type FraudFlag = { user_id: string; flag: string; matched_accounts: number };
+type AdminUserDetails = {
+  username: string;
+  email: string;
+  joined_at: string;
+  account_status: string;
+  login_history: { ip_address: string | null; user_agent: string; created_at: string }[];
+  referred_users: { user_id: string; username: string; joined_at: string }[];
+  ip_matches: { user_id: string; username: string; ip_address: string }[];
+};
 type TaskDraft = {
   title: string;
   description: string;
@@ -74,9 +95,9 @@ const emptyTask: TaskDraft = {
 };
 
 const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
-  { id: 'tasks', label: 'Tasks', icon: ClipboardList },
+  { id: 'tasks', label: 'Hustles', icon: ClipboardList },
   { id: 'users', label: 'Users & wallets', icon: Users },
-  { id: 'submissions', label: 'Task review', icon: BadgeCheck },
+  { id: 'submissions', label: 'Hustle review', icon: BadgeCheck },
   { id: 'withdrawals', label: 'Withdrawals', icon: CreditCard },
   { id: 'payoutSettings', label: 'Payout schedule', icon: CalendarClock },
   { id: 'planSubmissions', label: 'Plan approvals', icon: BadgeCheck },
@@ -85,6 +106,11 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'content', label: 'CMS & media', icon: FileText },
   { id: 'plans', label: 'Plans', icon: Package },
   { id: 'activity', label: 'Audit & logins', icon: History },
+  { id: 'advertisement', label: 'Dashboard ad', icon: Image },
+  { id: 'controls', label: 'Platform controls', icon: SlidersHorizontal },
+  { id: 'campaigns', label: 'Campaign approvals', icon: Megaphone },
+  { id: 'announcement', label: 'Welcome popup', icon: FileText },
+  { id: 'branding', label: 'Brand images', icon: Image },
 ];
 
 interface Props {
@@ -98,6 +124,9 @@ export default function AdminPanel({ user }: Props) {
   const [balances, setBalances] = useState<AdminBalance[]>([]);
   const [completions, setCompletions] = useState<AdminCompletion[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [fraudFlags, setFraudFlags] = useState<FraudFlag[]>([]);
+  const [selectedCompletionIds, setSelectedCompletionIds] = useState<string[]>([]);
+  const [bulkReviewNote, setBulkReviewNote] = useState('');
   const [totalUsers, setTotalUsers] = useState(0);
   const [page, setPage] = useState(0);
   const [search, setSearch] = useState('');
@@ -114,6 +143,10 @@ export default function AdminPanel({ user }: Props) {
   const [statusReason, setStatusReason] = useState('');
   const [walletForm, setWalletForm] = useState({ balanceType: 'reward', direction: 'credit', amount: '', reason: '' });
   const [references, setReferences] = useState<Record<string, string>>({});
+  const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
+  const [userDetails, setUserDetails] = useState<AdminUserDetails | null>(null);
+  const [userDetailLoading, setUserDetailLoading] = useState(false);
+  const [resetLink, setResetLink] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -123,7 +156,7 @@ export default function AdminPanel({ user }: Props) {
       setMessage('');
       const start = page * 50;
       const [taskResult, profileResult, completionResult, withdrawalResult] = await Promise.all([
-        supabase.from('tasks').select('*').order('created_at', { ascending: false }),
+        supabase.from('tasks').select('*').order('sort_order').order('created_at', { ascending: false }),
         supabase.from('profiles')
           .select('user_id, full_name, username, phone, tier, joined_at, account_status, status_reason', { count: 'exact' })
           .order('joined_at', { ascending: false })
@@ -142,7 +175,7 @@ export default function AdminPanel({ user }: Props) {
       const currentProfiles = (profileResult.data ?? []) as AdminProfile[];
       const userIds = currentProfiles.map(profile => profile.user_id);
       const balanceResult = userIds.length
-        ? await supabase.from('balances').select('user_id, reward_balance, referral_balance, total_earned').in('user_id', userIds)
+        ? await supabase.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').in('user_id', userIds)
         : { data: [], error: null };
       if (balanceResult.error) {
         if (active) setMessage(balanceResult.error.message);
@@ -176,6 +209,35 @@ export default function AdminPanel({ user }: Props) {
     loadData();
     return () => { active = false; };
   }, [page, refreshKey, user.id]);
+
+  useEffect(() => {
+    let active = true;
+    supabase.rpc('admin_fraud_flags').then(({ data, error }) => {
+      if (!active) return;
+      if (error) setMessage(error.message);
+      else setFraudFlags((data ?? []) as FraudFlag[]);
+    });
+    return () => { active = false; };
+  }, [refreshKey]);
+
+  async function openUserDetail(profile: AdminProfile) {
+    setSelectedUser(profile);
+    setUserDetails(null);
+    setResetLink('');
+    setUserDetailLoading(true);
+    const { data, error } = await supabase.rpc('admin_user_details', { p_user_id: profile.user_id });
+    setUserDetailLoading(false);
+    if (error) return notify(error.message);
+    setUserDetails(data as AdminUserDetails);
+  }
+
+  async function createPasswordResetLink() {
+    if (!selectedUser) return;
+    const { data, error } = await supabase.functions.invoke('admin-reset-password', { body: { user_id: selectedUser.user_id } });
+    if (error) return notify(error.message);
+    setResetLink((data as { action_link?: string }).action_link ?? '');
+    notify('Recovery link generated. Share it with the account owner through a verified channel.');
+  }
 
   function notify(text: string) {
     setMessage(text);
@@ -226,14 +288,14 @@ export default function AdminPanel({ user }: Props) {
     setTaskDraft(emptyTask);
     setEditingTask(null);
     setRefreshKey(current => current + 1);
-    notify(editingTask ? 'Task updated.' : 'Task created.');
+    notify(editingTask ? 'Hustle updated.' : 'Hustle created.');
   }
 
   async function toggleTask(task: Task) {
     const { error } = await supabase.from('tasks').update({ is_active: !task.is_active }).eq('id', task.id);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
-    notify(task.is_active ? 'Task paused.' : 'Task activated.');
+    notify(task.is_active ? 'Hustle paused.' : 'Hustle activated.');
   }
 
   async function shuffleTasks() {
@@ -256,7 +318,7 @@ export default function AdminPanel({ user }: Props) {
     setSaving(false);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
-    notify(`Updated verification mode for ${Number(data ?? 0)} tasks.`);
+    notify(`Updated verification mode for ${Number(data ?? 0)} hustles.`);
   }
 
   async function deleteTask(task: Task) {
@@ -264,7 +326,7 @@ export default function AdminPanel({ user }: Props) {
     const { error } = await supabase.from('tasks').delete().eq('id', task.id);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
-    notify('Task deleted.');
+    notify('Hustle deleted.');
   }
 
   async function adjustWallet(event: React.FormEvent) {
@@ -304,7 +366,7 @@ export default function AdminPanel({ user }: Props) {
   }
 
   async function reviewCompletion(completion: AdminCompletion, status: 'approved' | 'rejected') {
-    if (status === 'rejected' && !window.confirm('Reject this task submission?')) return;
+    if (status === 'rejected' && !window.confirm('Reject this hustle submission?')) return;
     const { error } = await supabase.rpc('admin_review_task_completion', {
       p_completion_id: completion.id,
       p_status: status,
@@ -312,7 +374,39 @@ export default function AdminPanel({ user }: Props) {
     });
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
-    notify(status === 'approved' ? 'Task approved and reward credited.' : 'Task submission rejected.');
+    notify(status === 'approved' ? 'Hustle approved and reward credited.' : 'Hustle submission rejected.');
+  }
+
+  async function bulkReviewCompletions(status: 'approved' | 'rejected') {
+    if (selectedCompletionIds.length === 0) return notify('Select at least one pending hustle.');
+    if (status === 'rejected' && !bulkReviewNote.trim()) return notify('Add an instruction message before bulk rejection.');
+    setSaving(true);
+    const results = await Promise.all(selectedCompletionIds.map(completionId => supabase.rpc('admin_review_task_completion', {
+      p_completion_id: completionId,
+      p_status: status,
+      p_review_note: bulkReviewNote.trim() || null,
+    })));
+    setSaving(false);
+    const error = results.find(result => result.error)?.error;
+    if (error) return notify(error.message);
+    setSelectedCompletionIds([]);
+    setBulkReviewNote('');
+    setRefreshKey(current => current + 1);
+    notify(`${selectedCompletionIds.length} submissions ${status}.`);
+  }
+
+  async function moveTask(task: Task, direction: -1 | 1) {
+    const index = tasks.findIndex(item => item.id === task.id);
+    const other = tasks[index + direction];
+    if (!other) return;
+    const reordered = [...tasks];
+    [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
+    setSaving(true);
+    const { error } = await supabase.rpc('admin_reorder_tasks', { p_task_ids: reordered.map(item => item.id) });
+    setSaving(false);
+    if (error) return notify(error.message);
+    setRefreshKey(current => current + 1);
+    notify('Hustle display order updated.');
   }
 
   async function openTaskProof(path: string) {
@@ -337,6 +431,8 @@ export default function AdminPanel({ user }: Props) {
 
   const userBalances = new Map(balances.map(balance => [balance.user_id, balance]));
   const userProfiles = new Map(profiles.map(profile => [profile.user_id, profile]));
+  const userRiskFlags = new Map<string, FraudFlag[]>();
+  for (const flag of fraudFlags) userRiskFlags.set(flag.user_id, [...(userRiskFlags.get(flag.user_id) ?? []), flag]);
   const visibleProfiles = profiles.filter(profile => {
     const query = search.trim().toLowerCase();
     return !query || `${profile.full_name} ${profile.username} ${profile.phone ?? ''}`.toLowerCase().includes(query);
@@ -355,7 +451,7 @@ export default function AdminPanel({ user }: Props) {
               <ShieldCheck size={20} />
             </div>
             <div>
-              <p className="font-bold">RewardPeak NG</p>
+              <p className="font-bold">Mr Hustle</p>
               <p className="text-xs text-gray-500">Administration · {user.email}</p>
             </div>
           </div>
@@ -372,6 +468,7 @@ export default function AdminPanel({ user }: Props) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+        <AdminMetricsPanel />
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-300">Operations</p>
@@ -379,7 +476,7 @@ export default function AdminPanel({ user }: Props) {
           </div>
           <div className="flex gap-3 text-xs text-gray-400">
             <span>{totalUsers.toLocaleString()} users</span>
-            <span>{pendingCompletions.length} task reviews</span>
+            <span>{pendingCompletions.length} hustle reviews</span>
             <span>{pendingWithdrawals.length} payouts pending</span>
           </div>
         </div>
@@ -416,11 +513,11 @@ export default function AdminPanel({ user }: Props) {
           <>
             {section === 'tasks' && (
               <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_380px]">
-                <section className="space-y-3" aria-label="Task catalog">
+                <section className="order-2 space-y-3 xl:order-2" aria-label="Hustle catalog">
                   <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/8 pb-3">
-                    <p className="text-xs text-gray-400">{visibleTasks.length} of {tasks.length} visible campaigns · unfunded tasks cannot be claimed</p>
+                    <p className="text-xs text-gray-400">{visibleTasks.length} of {tasks.length} visible campaigns · unfunded hustles cannot be claimed</p>
                     <div className="flex items-center gap-2">
-                      <select value={taskCategoryFilter} onChange={event => setTaskCategoryFilter(event.target.value)} aria-label="Filter tasks by category" className="admin-input max-w-64">
+                      <select value={taskCategoryFilter} onChange={event => setTaskCategoryFilter(event.target.value)} aria-label="Filter hustles by category" className="admin-input max-w-64">
                         {taskCategories.map(category => <option key={category} value={category}>{category}</option>)}
                       </select>
                       <select value={bulkVerificationMode} onChange={event => setBulkVerificationMode(event.target.value as VerificationMode)} aria-label="Bulk verification mode" className="admin-input max-w-48">
@@ -431,11 +528,11 @@ export default function AdminPanel({ user }: Props) {
                       <button onClick={shuffleTasks} disabled={saving || visibleTasks.length < 2} className="flex items-center gap-2 rounded border border-white/10 px-3 py-2 text-xs text-gray-300 hover:bg-white/5 disabled:opacity-40"><Shuffle size={14} /> Shuffle</button>
                     </div>
                   </div>
-                  {visibleTasks.map(task => (
+                  {visibleTasks.map((task, index) => (
                     <article key={task.id} className="flex flex-wrap items-center justify-between gap-4 border-b border-white/8 py-4">
                       <div className="min-w-0 flex-1">
                         <div className="flex flex-wrap items-center gap-2">
-                          <h2 className="font-semibold">{task.title}</h2>
+                          <span className="flex h-6 w-6 items-center justify-center bg-white/5 text-[10px] font-bold text-gray-400">{index + 1}</span><h2 className="font-semibold">{task.title}</h2>
                           <span className={`rounded px-2 py-0.5 text-[11px] ${task.is_active ? 'bg-emerald-400/10 text-emerald-300' : 'bg-white/8 text-gray-400'}`}>
                             {task.is_active ? 'Active' : 'Paused'}
                           </span>
@@ -449,6 +546,8 @@ export default function AdminPanel({ user }: Props) {
                         <p className="mt-1 text-xs text-gray-500">{task.category} · ₦{task.reward.toLocaleString()} · {task.required_plan_code} plan · quota {task.daily_quota || 'unlimited'}</p>
                       </div>
                       <div className="flex items-center gap-2">
+                        <button onClick={() => void moveTask(task, -1)} disabled={saving || index === 0} aria-label={`Move hustle ${index + 1} up`} className="rounded border border-white/10 p-2 text-gray-400 hover:text-white disabled:opacity-30"><ChevronUp size={14} /></button>
+                        <button onClick={() => void moveTask(task, 1)} disabled={saving || index === visibleTasks.length - 1} aria-label={`Move hustle ${index + 1} down`} className="rounded border border-white/10 p-2 text-gray-400 hover:text-white disabled:opacity-30"><ChevronDown size={14} /></button>
                         <button onClick={() => toggleTask(task)} className="rounded border border-white/10 px-3 py-1.5 text-xs text-gray-300 hover:bg-white/5">
                           {task.is_active ? 'Pause' : 'Activate'}
                         </button>
@@ -462,17 +561,17 @@ export default function AdminPanel({ user }: Props) {
                   {visibleTasks.length === 0 && <p className="py-10 text-center text-sm text-gray-500">No campaigns in this category.</p>}
                 </section>
 
-                <form onSubmit={saveTask} className="h-fit space-y-4 border-l border-white/8 pl-0 xl:pl-6">
+                <form onSubmit={saveTask} className="order-1 h-fit space-y-4 border-l border-white/8 pl-0 xl:order-1 xl:pl-6">
                   <div className="flex items-center justify-between">
-                    <h2 className="font-bold">{editingTask ? 'Edit task' : 'Create task'}</h2>
+                    <h2 className="font-bold">{editingTask ? 'Edit hustle' : 'Create hustle'}</h2>
                     {editingTask && <button type="button" onClick={() => { setEditingTask(null); setTaskDraft(emptyTask); }} aria-label="Cancel editing" className="text-gray-400 hover:text-white"><X size={16} /></button>}
                   </div>
-                  <input required value={taskDraft.title} onChange={event => setTaskDraft({ ...taskDraft, title: event.target.value })} placeholder="Task title" className="admin-input" />
+                  <input required value={taskDraft.title} onChange={event => setTaskDraft({ ...taskDraft, title: event.target.value })} placeholder="Hustle title" className="admin-input" />
                   <textarea required rows={3} value={taskDraft.description} onChange={event => setTaskDraft({ ...taskDraft, description: event.target.value })} placeholder="Description" className="admin-input resize-y" />
                   <div className="grid grid-cols-2 gap-3">
                     <input required value={taskDraft.category} onChange={event => setTaskDraft({ ...taskDraft, category: event.target.value })} placeholder="Category" className="admin-input" />
                     <select value={taskDraft.required_plan_code} onChange={event => setTaskDraft({ ...taskDraft, required_plan_code: event.target.value })} className="admin-input">
-                      {['free', 'premium', 'vip'].map(value => <option key={value} value={value}>{value === 'free' ? 'Free plan' : `${value[0].toUpperCase()}${value.slice(1)} plan`}</option>)}
+                      {['free', 'premium', 'vip', 'president'].map(value => <option key={value} value={value}>{value === 'free' ? 'H. Free' : value === 'premium' ? 'H. Maniac' : value === 'vip' ? 'H. Supreme Max' : 'H. President Max'}</option>)}
                     </select>
                   </div>
                   <label className="block text-xs text-gray-400">Verification mode
@@ -486,7 +585,7 @@ export default function AdminPanel({ user }: Props) {
                     <label className="text-xs text-gray-400">Reward (₦)<input required type="number" min="0.01" step="0.01" value={taskDraft.reward} onChange={event => setTaskDraft({ ...taskDraft, reward: event.target.value })} className="admin-input mt-1" /></label>
                     <label className="text-xs text-gray-400">Daily quota (0 = none)<input required type="number" min="0" step="1" value={taskDraft.daily_quota} onChange={event => setTaskDraft({ ...taskDraft, daily_quota: event.target.value })} className="admin-input mt-1" /></label>
                   </div>
-                  <input type="url" required={taskDraft.verification_mode === 'automatic'} value={taskDraft.task_url} onChange={event => setTaskDraft({ ...taskDraft, task_url: event.target.value })} placeholder="Task URL" className="admin-input" />
+                  <input type="url" required={taskDraft.verification_mode === 'automatic'} value={taskDraft.task_url} onChange={event => setTaskDraft({ ...taskDraft, task_url: event.target.value })} placeholder="Hustle URL" className="admin-input" />
                   <label className="flex items-center gap-2 text-sm text-gray-300">
                     <input type="checkbox" checked={taskDraft.is_funded} onChange={event => setTaskDraft({ ...taskDraft, is_funded: event.target.checked })} className="accent-emerald-400" /> Campaign budget is funded and approved
                   </label>
@@ -496,7 +595,7 @@ export default function AdminPanel({ user }: Props) {
                   {taskDraft.proof_required && <textarea required rows={2} value={taskDraft.proof_instructions} onChange={event => setTaskDraft({ ...taskDraft, proof_instructions: event.target.value })} placeholder="Proof instructions" className="admin-input resize-y" />}
                   <button disabled={saving} className="flex w-full items-center justify-center gap-2 rounded-lg bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">
                     {saving ? <Loader2 size={16} className="animate-spin" /> : editingTask ? <Check size={16} /> : <Plus size={16} />}
-                    {editingTask ? 'Save changes' : 'Create task'}
+                    {editingTask ? 'Save changes' : 'Create hustle'}
                   </button>
                 </form>
               </div>
@@ -513,13 +612,13 @@ export default function AdminPanel({ user }: Props) {
                 </div>
                 <div className="overflow-x-auto border-y border-white/8">
                   <table className="w-full min-w-[980px] text-left text-sm">
-                    <thead className="text-xs uppercase text-gray-500"><tr><th className="py-3 pr-4">Member</th><th className="py-3 pr-4">Tier</th><th className="py-3 pr-4">Status</th><th className="py-3 pr-4">Reward</th><th className="py-3 pr-4">Referral</th><th className="py-3 pr-4">Joined</th><th className="py-3">Wallet action</th></tr></thead>
+                    <thead className="text-xs uppercase text-gray-500"><tr><th className="py-3 pr-4">Hustler</th><th className="py-3 pr-4">Tier</th><th className="py-3 pr-4">Status</th><th className="py-3 pr-4">Hustler Wallet</th><th className="py-3 pr-4">Referral Wallet</th><th className="py-3 pr-4">Fund Wallet</th><th className="py-3 pr-4">Joined</th><th className="py-3">Wallet action</th></tr></thead>
                     <tbody className="divide-y divide-white/6">
                       {visibleProfiles.map(profile => {
                         const balance = userBalances.get(profile.user_id);
                         return (
                           <tr key={profile.user_id}>
-                            <td className="py-3 pr-4"><p className="font-semibold">{profile.full_name || profile.username}</p><p className="text-xs text-gray-500">@{profile.username} · {profile.phone || 'No phone'}</p></td>
+                            <td className="py-3 pr-4"><button onClick={() => void openUserDetail(profile)} className="text-left font-semibold hover:text-amber-200">{profile.full_name || profile.username}</button><p className="text-xs text-gray-500">@{profile.username} · {profile.phone || 'No phone'}</p>{(userRiskFlags.get(profile.user_id) ?? []).map(flag => <span key={flag.flag} className="mt-1 mr-1 inline-block border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] text-red-200">Risk: {flag.flag} ({flag.matched_accounts})</span>)}</td>
                             <td className="py-3 pr-4 text-gray-300">{profile.tier}</td>
                             <td className="py-3 pr-4">
                               <select
@@ -540,6 +639,7 @@ export default function AdminPanel({ user }: Props) {
                             </td>
                             <td className="py-3 pr-4">₦{(balance?.reward_balance ?? 0).toLocaleString()}</td>
                             <td className="py-3 pr-4">₦{(balance?.referral_balance ?? 0).toLocaleString()}</td>
+                            <td className="py-3 pr-4">₦{(balance?.fund_balance ?? 0).toLocaleString()}</td>
                             <td className="py-3 pr-4 text-gray-400">{profile.joined_at ? new Date(profile.joined_at).toLocaleDateString('en-NG') : '—'}</td>
                             <td className="py-3"><button onClick={() => setWalletUser(profile)} className="inline-flex items-center gap-1.5 rounded border border-emerald-300/20 px-2.5 py-1.5 text-xs text-emerald-200 hover:bg-emerald-300/10"><CircleDollarSign size={14} /> Adjust</button></td>
                           </tr>
@@ -559,13 +659,20 @@ export default function AdminPanel({ user }: Props) {
 
             {section === 'submissions' && (
               <section className="space-y-3">
+                <div className="sticky top-20 z-10 grid gap-3 border border-white/10 bg-[#111] p-4 shadow-xl sm:grid-cols-[auto_minmax(0,1fr)_auto_auto] sm:items-end">
+                  <label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={pendingCompletions.length > 0 && pendingCompletions.every(completion => selectedCompletionIds.includes(completion.id))} onChange={event => setSelectedCompletionIds(event.target.checked ? pendingCompletions.map(completion => completion.id) : [])} className="accent-orange-400" />Select all ({pendingCompletions.length})</label>
+                  <label className="text-xs text-gray-400">Instruction message<textarea value={bulkReviewNote} onChange={event => setBulkReviewNote(event.target.value)} maxLength={500} rows={2} placeholder="Optional approval note or rejection instructions" className="admin-input mt-1 resize-y" /></label>
+                  <button type="button" onClick={() => void bulkReviewCompletions('approved')} disabled={saving || selectedCompletionIds.length === 0} className="bg-orange-400 px-3 py-2 text-xs font-bold text-black disabled:opacity-40">Bulk approve</button>
+                  <button type="button" onClick={() => void bulkReviewCompletions('rejected')} disabled={saving || selectedCompletionIds.length === 0 || !bulkReviewNote.trim()} className="border border-white/20 px-3 py-2 text-xs font-semibold text-white disabled:opacity-40">Bulk reject</button>
+                </div>
                 {pendingCompletions.map(completion => {
                   const profile = userProfiles.get(completion.user_id);
                   return (
                     <article key={completion.id} className="border-b border-white/8 py-4">
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
-                          <h2 className="font-semibold">{completion.task?.title ?? 'Task submission'}</h2>
+                          <label className="mb-2 inline-flex items-center gap-2 text-[11px] text-gray-500"><input type="checkbox" checked={selectedCompletionIds.includes(completion.id)} onChange={event => setSelectedCompletionIds(current => event.target.checked ? [...new Set([...current, completion.id])] : current.filter(id => id !== completion.id))} className="accent-orange-400" />Select hustle</label>
+                          <h2 className="font-semibold">{completion.task?.title ?? 'Hustle submission'}</h2>
                           <p className="mt-1 text-xs text-gray-400">{profile?.full_name ?? profile?.username ?? completion.user_id} · {new Date(completion.completed_at).toLocaleString('en-NG')}</p>
                           {completion.proof_text && <p className="mt-3 whitespace-pre-wrap rounded bg-white/5 p-3 text-sm text-gray-300">{completion.proof_text}</p>}
                           {completion.proof_path && <button onClick={() => openTaskProof(completion.proof_path!)} className="mt-3 inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-300 hover:text-emerald-200"><ExternalLink size={13} /> View private screenshot</button>}
@@ -579,7 +686,7 @@ export default function AdminPanel({ user }: Props) {
                     </article>
                   );
                 })}
-                {pendingCompletions.length === 0 && <p className="py-12 text-center text-sm text-gray-500">No pending task submissions.</p>}
+                {pendingCompletions.length === 0 && <p className="py-12 text-center text-sm text-gray-500">No pending hustle submissions.</p>}
               </section>
             )}
 
@@ -592,7 +699,8 @@ export default function AdminPanel({ user }: Props) {
                       <div className="flex flex-wrap items-start justify-between gap-4">
                         <div>
                           <div className="flex flex-wrap items-center gap-2"><h2 className="font-semibold">₦{withdrawal.amount.toLocaleString()} · {withdrawal.bank_name}</h2><span className={`rounded px-2 py-0.5 text-[11px] ${withdrawal.status === 'pending' ? 'bg-amber-300/10 text-amber-200' : 'bg-white/8 text-gray-400'}`}>{withdrawal.status}</span></div>
-                          <p className="mt-1 text-xs text-gray-400">{profile?.full_name ?? profile?.username ?? withdrawal.user_id} · {withdrawal.account_name} · {withdrawal.account_no}</p>
+                          <p className="mt-1 text-xs text-gray-400">{profile?.full_name ?? profile?.username ?? withdrawal.user_id} · {withdrawal.wallet_type ?? 'hustler'} wallet · {withdrawal.account_name} · {withdrawal.account_no}</p>
+                          {(userRiskFlags.get(withdrawal.user_id) ?? []).map(flag => <p key={flag.flag} className="mt-2 inline-block border border-red-400/30 bg-red-400/10 px-2 py-1 text-[11px] font-semibold text-red-200">Risk flag: {flag.flag} ({flag.matched_accounts} accounts)</p>)}
                           <p className="mt-1 text-xs text-gray-500">Requested {new Date(withdrawal.requested_at).toLocaleString('en-NG')}</p>
                         </div>
                         {withdrawal.status === 'pending' && (
@@ -618,9 +726,32 @@ export default function AdminPanel({ user }: Props) {
             {section === 'planSubmissions' && <AdminSubscriptionReviewPanel />}
             {section === 'funding' && <AdminFundingPanel />}
             {section === 'supportSettings' && <AdminSupportSettingsPanel />}
+            {section === 'advertisement' && <AdminAdBannerPanel />}
+            {section === 'controls' && <AdminPlatformSettingsPanel />}
+            {section === 'campaigns' && <AdminCampaignPanel />}
+            {section === 'announcement' && <AdminAnnouncementPanel />}
+            {section === 'branding' && <AdminBrandingPanel />}
           </>
         )}
       </main>
+
+      {selectedUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedUser(null); }}>
+          <section role="dialog" aria-modal="true" aria-label="User activity details" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-white/10 bg-[#111] p-5 shadow-2xl sm:p-6">
+            <header className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
+              <div><p className="text-xs font-bold uppercase text-amber-300">Account activity</p><h2 className="mt-1 text-lg font-bold">{selectedUser.full_name || selectedUser.username}</h2><p className="text-xs text-gray-500">@{selectedUser.username} · Registered {selectedUser.joined_at ? new Date(selectedUser.joined_at).toLocaleString('en-NG') : 'unknown'}</p></div>
+              <button onClick={() => setSelectedUser(null)} aria-label="Close user details" className="p-2 text-gray-400 hover:text-white"><X size={18} /></button>
+            </header>
+            {userDetailLoading ? <p className="py-10 text-center text-sm text-gray-400"><Loader2 className="mr-2 inline animate-spin" size={16} />Loading account activity</p> : userDetails && <div className="space-y-5 py-5">
+              <dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-gray-500">Email</dt><dd className="break-all">{userDetails.email || 'Unavailable'}</dd></div><div><dt className="text-xs text-gray-500">Phone</dt><dd>{selectedUser.phone || 'Unavailable'}</dd></div><div><dt className="text-xs text-gray-500">Username</dt><dd>@{userDetails.username}</dd></div><div><dt className="text-xs text-gray-500">Status</dt><dd className="capitalize">{userDetails.account_status}</dd></div></dl>
+              <section><h3 className="mb-2 text-sm font-bold">Login devices and IP addresses</h3><div className="divide-y divide-white/8 border-y border-white/8">{userDetails.login_history.map((login, index) => <div key={`${login.created_at}-${index}`} className="grid gap-1 py-3 sm:grid-cols-[1fr_1.5fr_auto]"><span className="text-xs text-amber-200">{login.ip_address || 'IP unavailable'}</span><span className="break-all text-xs text-gray-400">{login.user_agent || 'Device unavailable'}</span><time className="text-xs text-gray-500">{new Date(login.created_at).toLocaleString('en-NG')}</time></div>)}{userDetails.login_history.length === 0 && <p className="py-4 text-xs text-gray-500">No login history recorded.</p>}</div></section>
+              <section><h3 className="mb-2 text-sm font-bold">Shared-IP account comparisons</h3><div className="flex flex-wrap gap-2">{userDetails.ip_matches.slice(0, 20).map((match, index) => <span key={`${match.user_id}-${index}`} className="border border-red-400/20 bg-red-400/5 px-2 py-1 text-xs text-red-200">@{match.username} · {match.ip_address}</span>)}{userDetails.ip_matches.length === 0 && <p className="text-xs text-gray-500">No shared IP matches detected.</p>}</div></section>
+              <section><h3 className="mb-2 text-sm font-bold">Registered referrals</h3><div className="flex flex-wrap gap-2">{userDetails.referred_users.map(referred => <span key={referred.user_id} className="border border-white/10 px-2 py-1 text-xs text-gray-300">@{referred.username} · {new Date(referred.joined_at).toLocaleDateString('en-NG')}</span>)}{userDetails.referred_users.length === 0 && <p className="text-xs text-gray-500">No referred accounts recorded.</p>}</div></section>
+              <section className="border-t border-white/10 pt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Password recovery</h3><p className="mt-1 text-xs text-gray-500">Generate a recovery link for the account owner. Never request their current password.</p></div><button onClick={() => void createPasswordResetLink()} className="border border-amber-300/30 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-300/10">Generate reset link</button></div>{resetLink && <textarea readOnly value={resetLink} rows={3} className="admin-input mt-3 resize-y" aria-label="Generated password recovery link" />}</section>
+            </div>}
+          </section>
+        </div>
+      )}
 
       {walletUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setWalletUser(null); }}>
@@ -629,7 +760,7 @@ export default function AdminPanel({ user }: Props) {
               <div><p className="text-xs font-bold uppercase text-emerald-300">Audited adjustment</p><h2 className="mt-1 font-bold">{walletUser.full_name || walletUser.username}</h2></div>
               <button type="button" onClick={() => setWalletUser(null)} aria-label="Close adjustment form" className="text-gray-400 hover:text-white"><X size={18} /></button>
             </div>
-            <label className="block text-xs text-gray-400">Balance<select value={walletForm.balanceType} onChange={event => setWalletForm({ ...walletForm, balanceType: event.target.value })} className="admin-input mt-1"><option value="reward">Reward</option><option value="referral">Referral</option></select></label>
+            <label className="block text-xs text-gray-400">Balance<select value={walletForm.balanceType} onChange={event => setWalletForm({ ...walletForm, balanceType: event.target.value })} className="admin-input mt-1"><option value="reward">Hustler Wallet</option><option value="referral">Referral Wallet</option><option value="fund">Fund Wallet</option></select></label>
             <label className="block text-xs text-gray-400">Adjustment type<select value={walletForm.direction} onChange={event => setWalletForm({ ...walletForm, direction: event.target.value })} className="admin-input mt-1"><option value="credit">Credit</option><option value="debit">Debit</option></select></label>
             <label className="block text-xs text-gray-400">Amount (₦)<input required type="number" min="0.01" step="0.01" value={walletForm.amount} onChange={event => setWalletForm({ ...walletForm, amount: event.target.value })} className="admin-input mt-1" /></label>
             <label className="block text-xs text-gray-400">Audit reason<textarea required maxLength={500} rows={3} value={walletForm.reason} onChange={event => setWalletForm({ ...walletForm, reason: event.target.value })} className="admin-input mt-1 resize-y" /></label>

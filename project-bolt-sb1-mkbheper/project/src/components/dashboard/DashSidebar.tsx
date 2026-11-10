@@ -2,7 +2,6 @@ import {
   LayoutDashboard,
   ClipboardList,
   Users,
-  CreditCard,
   User,
   HelpCircle,
   LogOut,
@@ -12,40 +11,44 @@ import {
   Crown,
   WalletCards,
   History,
+  Trophy,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandLogo from '@/components/BrandLogo';
 
 export type DashTab =
   | 'overview'
   | 'tasks'
   | 'referral'
-  | 'withdrawal'
+  | 'wallet'
+  | 'leaderboard'
   | 'profile'
   | 'plans'
   | 'payment'
   | 'history'
-  | 'funding'
   | 'support';
 
 interface Props {
   active: DashTab;
   onChange: (t: DashTab) => void;
   fullName: string;
+  avatarUrl: string | null;
   tier: string;
   onLogout: () => void;
   taskCount: number;
   showPlans: boolean;
+  featureAccess: Record<string, boolean>;
   sideOpen: boolean;
   setSideOpen: (v: boolean) => void;
 }
 
 const navItems: { id: DashTab; icon: typeof LayoutDashboard; label: string }[] = [
-  { id: 'overview',   icon: LayoutDashboard, label: 'Overview' },
-  { id: 'tasks',      icon: ClipboardList,   label: 'Tasks' },
-  { id: 'history',    icon: History,         label: 'Task History' },
+  { id: 'overview',   icon: LayoutDashboard, label: 'Home' },
+  { id: 'tasks',      icon: ClipboardList,   label: 'Hustles' },
+  { id: 'history',    icon: History,         label: 'Hustle history' },
   { id: 'referral',   icon: Users,           label: 'Referrals' },
-  { id: 'withdrawal', icon: CreditCard,      label: 'Withdrawal' },
-  { id: 'funding',    icon: WalletCards,     label: 'Fund Account' },
+  { id: 'wallet',     icon: WalletCards,     label: 'Wallet' },
+  { id: 'leaderboard', icon: Trophy,         label: 'Leaderboard' },
   { id: 'plans',      icon: Crown,           label: 'Plans' },
   { id: 'support',    icon: HelpCircle,      label: 'Support' },
   { id: 'profile',    icon: User,            label: 'Profile' },
@@ -59,7 +62,7 @@ const tierColors: Record<string, string> = {
 };
 
 export default function DashSidebar({
-  active, onChange, fullName, tier, onLogout, taskCount, showPlans, sideOpen, setSideOpen,
+  active, onChange, fullName, avatarUrl, tier, onLogout, taskCount, showPlans, featureAccess, sideOpen, setSideOpen,
 }: Props) {
   const initials = fullName
     ? fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
@@ -86,12 +89,7 @@ export default function DashSidebar({
         {/* Logo + close */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-white/6">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20">
-              <span className="text-white font-black text-base">M</span>
-            </div>
-            <span className="text-white font-black text-lg">
-              Mr<span className="text-amber-400">Hustler</span>
-            </span>
+            <BrandLogo className="flex items-center gap-3" markClassName="h-9 w-9 overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20" wordmarkClassName="text-white font-black text-lg" fallbackClassName="text-white font-black text-base" />
           </div>
           <button
             onClick={() => setSideOpen(false)}
@@ -105,12 +103,12 @@ export default function DashSidebar({
         <div className="px-5 py-4 border-b border-white/6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400/30 to-orange-600/30 border border-amber-400/20 flex items-center justify-center flex-shrink-0">
-              <span className="text-amber-400 font-bold text-sm">{initials}</span>
+              {avatarUrl ? <img src={avatarUrl} alt="" className="h-full w-full rounded-[inherit] object-cover" /> : <span className="text-amber-400 font-bold text-sm">{initials}</span>}
             </div>
             <div className="min-w-0">
               <p className="text-white font-semibold text-sm truncate">{fullName || 'Hustler'}</p>
               <span className={`inline-block px-2 py-0.5 rounded-md text-xs font-bold border ${tc}`}>
-                {tier} Member
+                {tier}
               </span>
             </div>
           </div>
@@ -120,14 +118,18 @@ export default function DashSidebar({
         <nav className="flex-1 px-3 py-4 overflow-y-auto">
           <p className="text-gray-600 text-[10px] font-bold uppercase tracking-wider px-3 mb-3">Menu</p>
           <ul className="space-y-1">
-            {navItems.filter(item => item.id !== 'plans' || showPlans).map(item => {
+            {navItems.filter(item => {
+              if (item.id === 'plans' && !showPlans) return false;
+              const featureKey = item.id === 'tasks' ? 'hustles' : item.id === 'referral' ? 'referrals' : item.id === 'leaderboard' ? 'leaderboard' : null;
+              return !featureKey || featureAccess[featureKey] !== false;
+            }).map(item => {
               const Icon = item.icon;
               const isActive = active === item.id;
               return (
                 <li key={item.id}>
                   <button
                     onClick={() => { onChange(item.id); setSideOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${item.id === 'history' ? 'pl-9' : ''} ${
                       isActive
                         ? 'bg-amber-400/10 text-amber-400 border border-amber-400/15'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -172,15 +174,15 @@ export function DashTopbar({
   tab: DashTab;
 }) {
   const labels: Record<DashTab, string> = {
-    overview:   'Dashboard Overview',
-    tasks:      'Available Tasks',
+    overview:   'Home',
+    tasks:      'Hustles',
     referral:   'Referral Program',
-    withdrawal: 'Withdrawal',
+    wallet:     'Wallet',
+    leaderboard: 'Leaderboard',
     profile:    'My Profile',
     plans:      'Plans & Membership',
     payment:    'Payment Selection',
-    history:    'Task History',
-    funding:    'Fund Account',
+    history:    'Hustle history',
     support:    'Help & Support',
   };
 

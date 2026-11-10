@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import ThemeToggle from '@/components/ThemeToggle';
+import BrandLogo from '@/components/BrandLogo';
 
 const navLinks = [
   { label: 'Home', path: '/' },
@@ -41,13 +42,8 @@ export default function Navbar({ onAuthRequest }: Props) {
     >
       <nav className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex items-center justify-between h-18 py-4">
         {/* Logo */}
-        <Link to="/" onClick={handleNav} className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:shadow-amber-500/40 transition-shadow">
-            <span className="text-white font-black text-xl">M</span>
-          </div>
-          <span className="text-white font-black text-xl tracking-wide">
-            Mr<span className="text-amber-400">Hustler</span>
-          </span>
+        <Link to="/" onClick={handleNav} className="group">
+          <BrandLogo className="flex items-center gap-3" markClassName="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20 group-hover:shadow-amber-500/40 transition-shadow overflow-hidden" wordmarkClassName="text-white font-black text-xl tracking-wide" fallbackClassName="text-white font-black text-xl" />
         </Link>
 
         {/* Desktop nav */}

@@ -43,7 +43,7 @@ export default function HowItWorks() {
             How earning works
             <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-amber-400 to-orange-500">
-              and why tasks pay
+              and why hustles pay
             </span>
           </h2>
           <p className="text-gray-400 text-lg max-w-xl mx-auto leading-relaxed">
@@ -66,7 +66,7 @@ export default function HowItWorks() {
         <div className="mt-8 grid gap-4 border border-white/8 bg-white/3 p-6 sm:grid-cols-2 sm:p-8">
           <div className="flex items-start gap-3">
             <ClipboardCheck size={19} className="mt-0.5 shrink-0 text-amber-400" />
-            <div><h3 className="text-sm font-bold text-white">Clear task terms</h3><p className="mt-1 text-xs leading-relaxed text-gray-400">Review the eligibility, link, proof requirements, and reward before claiming any task.</p></div>
+            <div><h3 className="text-sm font-bold text-white">Clear hustle terms</h3><p className="mt-1 text-xs leading-relaxed text-gray-400">Review eligibility, links, proof requirements, and rewards before starting a hustle.</p></div>
           </div>
           <div className="flex items-start gap-3">
             <BadgeCheck size={19} className="mt-0.5 shrink-0 text-green-400" />

@@ -11,7 +11,7 @@ const stats = [
 
 export default function Hero() {
   const content = useSiteContent(['home.hero.title', 'home.hero.description', 'home.hero.image']);
-  const titleLines = (content['home.hero.title'] || 'Turn Every\nTask into\nReal Naira').split('\n');
+  const titleLines = (content['home.hero.title'] || 'Turn Every\nHustle into\nReal Naira').split('\n');
 
   return (
     <section

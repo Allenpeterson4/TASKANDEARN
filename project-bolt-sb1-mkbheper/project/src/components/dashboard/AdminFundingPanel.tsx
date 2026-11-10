@@ -48,11 +48,11 @@ export default function AdminFundingPanel() {
 
   return <div className="space-y-8">
     <form onSubmit={save} className="max-w-2xl space-y-4">
-      <div><p className="text-xs font-bold uppercase tracking-wider text-amber-300">Wallet funding configuration</p><h2 className="mt-1 text-xl font-black">Funding account details</h2><p className="mt-1 text-sm text-gray-400">These details are shown to members choosing manual bank transfer.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-wider text-amber-300">Fund Wallet configuration</p><h2 className="mt-1 text-xl font-black">Funding account details</h2><p className="mt-1 text-sm text-gray-400">These details are shown to hustlers choosing manual bank transfer.</p></div>
       <label className="flex items-center gap-3 text-sm text-gray-300"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings({ ...settings, enabled: event.target.checked })} className="accent-amber-400" /> Enable wallet funding submissions</label>
       <div className="grid gap-4 sm:grid-cols-2"><label className="text-xs text-gray-400">Bank name<input required value={settings.bank_name} onChange={event => setSettings({ ...settings, bank_name: event.target.value })} className="admin-input mt-1" /></label><label className="text-xs text-gray-400">Account number<input required value={settings.account_number} onChange={event => setSettings({ ...settings, account_number: event.target.value })} className="admin-input mt-1" /></label></div>
       <label className="block text-xs text-gray-400">Account name<input required value={settings.account_name} onChange={event => setSettings({ ...settings, account_name: event.target.value })} className="admin-input mt-1" /></label>
-      <label className="block text-xs text-gray-400">Member instructions<textarea required rows={3} value={settings.instructions} onChange={event => setSettings({ ...settings, instructions: event.target.value })} className="admin-input mt-1 resize-y" /></label>
+      <label className="block text-xs text-gray-400">Hustler instructions<textarea required rows={3} value={settings.instructions} onChange={event => setSettings({ ...settings, instructions: event.target.value })} className="admin-input mt-1 resize-y" /></label>
       <button disabled={saving} className="flex items-center gap-2 rounded-lg bg-amber-400 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Save funding settings</button>
     </form>
     {message && <div role="status" className="border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-300">{message}</div>}

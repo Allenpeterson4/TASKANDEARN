@@ -21,8 +21,8 @@ export default function NotificationsPanel({ completions, withdrawals, deposits,
     ...completions.map(completion => ({
       id: `task-${completion.id}`,
       type: 'task' as const,
-      title: completion.status === 'approved' ? 'Task approved' : completion.status === 'rejected' ? 'Task submission declined' : 'Task submitted for review',
-      body: completion.status === 'approved' ? 'Your reward has been credited to your wallet.' : completion.status === 'rejected' ? 'Review the task requirements and try again.' : 'Your task is awaiting verification.',
+      title: completion.status === 'approved' ? 'Hustle approved' : completion.status === 'rejected' ? 'Hustle submission declined' : 'Hustle submitted for review',
+      body: completion.status === 'approved' ? 'Your reward has been credited to your wallet.' : completion.status === 'rejected' ? 'Review the hustle requirements and try again.' : 'Your hustle is awaiting verification.',
       date: completion.reviewed_at ?? completion.completed_at,
     })),
     ...deposits.map(deposit => ({
@@ -49,7 +49,7 @@ export default function NotificationsPanel({ completions, withdrawals, deposits,
   }
 
   function icon(type: NotificationItem['type']) {
-    if (type === 'task') return <CheckCircle size={16} className="text-green-400" />;
+    if (type === 'task') return <CheckCircle size={16} className="text-orange-300" />;
     if (type === 'funding') return <WalletCards size={16} className="text-blue-400" />;
     if (type === 'withdrawal') return <CreditCard size={16} className="text-amber-400" />;
     return <Bell size={16} className="text-purple-400" />;

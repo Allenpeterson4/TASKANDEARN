@@ -3,18 +3,21 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/lib/supabase';
 import type { Profile, Balance, Task, TaskCompletion, Referral, Withdrawal } from '@/lib/supabase';
 import DashSidebar, { DashTopbar, type DashTab } from './DashSidebar';
-import WelcomeModal from './WelcomeModal';
+import AnnouncementModal from './AnnouncementModal';
 import OverviewPanel from './OverviewPanel';
 import TasksPanel from './TasksPanel';
 import ReferralPanel from './ReferralPanel';
-import WithdrawalPanel from './WithdrawalPanel';
+import WalletPanel from './WalletPanel';
 import ProfilePanel from './ProfilePanel';
 import SupportPanel from './SupportPanel';
 import SubscriptionPanel from './SubscriptionPanel';
-import FundAccountPanel from './FundAccountPanel';
 import PaymentSelectionPanel from './PaymentSelectionPanel';
 import NotificationsPanel from './NotificationsPanel';
 import TaskHistoryPanel from './TaskHistoryPanel';
+import ActivityTracker from './ActivityTracker';
+import DashboardAdBanner from './DashboardAdBanner';
+import LeaderboardPanel from './LeaderboardPanel';
+import BrandLogo from '@/components/BrandLogo';
 
 interface Props {
   user: User;
@@ -36,6 +39,7 @@ export default function Dashboard({ user }: Props) {
   const [fundingDeposits, setFundingDeposits] = useState<{ id: string; amount: number; status: string; created_at: string }[]>([]);
   const [currentPlanCode, setCurrentPlanCode] = useState('free');
   const [availablePlanCodes, setAvailablePlanCodes] = useState<string[]>([]);
+  const [featureAccess, setFeatureAccess] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -59,7 +63,7 @@ export default function Dashboard({ user }: Props) {
         supabase.from('withdrawals').select('*').eq('user_id', user.id).order('requested_at', { ascending: false }),
         supabase.from('funding_deposits').select('id, amount, status, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
         supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
-        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').gt('ends_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       setProfile(prof ?? null);
       setBalance(bal ?? null);
@@ -79,10 +83,26 @@ export default function Dashboard({ user }: Props) {
 
   useEffect(() => {
     let active = true;
+    supabase.from('feature_permissions').select('feature_key, free_enabled, premium_enabled').then(({ data }) => {
+      if (!active) return;
+      const premium = currentPlanCode !== 'free';
+      setFeatureAccess(Object.fromEntries((data ?? []).map(feature => [feature.feature_key, premium ? feature.premium_enabled : feature.free_enabled])));
+    });
+    return () => { active = false; };
+  }, [currentPlanCode]);
+
+  useEffect(() => {
+    const featureByTab: Partial<Record<DashTab, string>> = { tasks: 'hustles', referral: 'referrals', leaderboard: 'leaderboard' };
+    const feature = featureByTab[tab];
+    if (feature && featureAccess[feature] === false) setTab('overview');
+  }, [featureAccess, tab]);
+
+  useEffect(() => {
+    let active = true;
     async function refreshPlanAvailability() {
       const [{ data: plans }, { data: subscription }] = await Promise.all([
         supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
-        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').gt('ends_at', new Date().toISOString()).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (active) {
         setAvailablePlanCodes((plans ?? []).map(plan => plan.plan_code));
@@ -103,19 +123,11 @@ export default function Dashboard({ user }: Props) {
     await supabase.auth.signOut();
   }
 
-  async function transferReferralEarnings() {
-    const { data, error } = await supabase.rpc('transfer_referral_balance');
-    if (error) throw error;
-    if (data) setBalance(data as Balance);
-  }
-
   if (loading) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center animate-pulse">
-            <span className="text-white font-black text-2xl">M</span>
-          </div>
+          <BrandLogo className="animate-pulse" showWordmark={false} markClassName="h-14 w-14 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center" fallbackClassName="text-white font-black text-2xl" />
           <p className="text-gray-400 text-sm">Loading dashboard…</p>
         </div>
       </div>
@@ -136,10 +148,13 @@ export default function Dashboard({ user }: Props) {
 
   return (
     <div className="min-h-screen bg-[#0a0a0a] flex">
+      <ActivityTracker userId={user.id} />
       {showModal && (
-        <WelcomeModal
+        <AnnouncementModal
+          userId={user.id}
           onClose={() => setShowModal(false)}
           onClaimOffer={() => { setShowModal(false); setTab('tasks'); }}
+          onBalanceUpdated={nextBalance => setBalance(nextBalance)}
           fullName={profile?.full_name}
         />
       )}
@@ -148,10 +163,12 @@ export default function Dashboard({ user }: Props) {
         active={tab}
         onChange={setTab}
         fullName={profile?.full_name ?? user.email?.split('@')[0] ?? 'Hustler'}
+        avatarUrl={profile?.avatar_url ?? null}
         tier={profile?.tier ?? 'Bronze'}
         onLogout={handleLogout}
         taskCount={tasks.length}
         showPlans={availablePlanCodes.length > 0}
+        featureAccess={featureAccess}
         sideOpen={sideOpen}
         setSideOpen={setSideOpen}
       />
@@ -167,6 +184,7 @@ export default function Dashboard({ user }: Props) {
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="max-w-5xl mx-auto">
+            <DashboardAdBanner />
             {tab === 'overview' && (
               <OverviewPanel
                 profile={profile}
@@ -174,8 +192,9 @@ export default function Dashboard({ user }: Props) {
                 tasks={tasks}
                 completions={completions}
                 withdrawals={withdrawals}
-                onNavigate={(t) => setTab(t)}
-                onTransferReferral={transferReferralEarnings}
+                userId={user.id}
+                onNavigate={tabName => setTab(tabName)}
+                onBalanceUpdated={nextBalance => setBalance(nextBalance)}
               />
             )}
             {tab === 'tasks' && (
@@ -185,6 +204,7 @@ export default function Dashboard({ user }: Props) {
                 userId={user.id}
                 currentPlanCode={currentPlanCode}
                 availablePlanCodes={availablePlanCodes}
+                allowCampaigns={featureAccess.campaigns !== false}
                 onUpgrade={() => setTab('plans')}
                 onCompletionAdded={(c) => setCompletions(prev => [...prev, c])}
                 onBalanceUpdated={(nextBalance) => setBalance(current => current ? { ...current, ...nextBalance } : current)}
@@ -196,27 +216,40 @@ export default function Dashboard({ user }: Props) {
                 profile={profile}
                 balance={balance}
                 referrals={referrals}
+                isPremium={currentPlanCode !== 'free'}
+                allowCustomReferralCode={featureAccess['custom-referral-code'] !== false}
+                onProfileUpdated={nextProfile => setProfile(nextProfile)}
                 onBalanceUpdated={(nextBalance) => setBalance(nextBalance)}
               />
             )}
-            {tab === 'withdrawal' && (
-              <WithdrawalPanel
+            {tab === 'wallet' && (
+              <WalletPanel
+                profile={profile}
                 balance={balance}
+                referrals={referrals}
                 withdrawals={withdrawals}
-                onWithdrawalAdded={(w) => setWithdrawals(prev => [w, ...prev])}
+                userId={user.id}
+                currentPlanCode={currentPlanCode}
+                allowTransfers={featureAccess.transfers !== false}
+                allowCustomReferralCode={featureAccess['custom-referral-code'] !== false}
+                onWithdrawalAdded={withdrawal => setWithdrawals(previous => [withdrawal, ...previous])}
+                onBalanceUpdated={nextBalance => setBalance(nextBalance)}
+                onProfileUpdated={nextProfile => setProfile(nextProfile)}
               />
             )}
+            {tab === 'leaderboard' && <LeaderboardPanel userId={user.id} />}
             {tab === 'profile' && (
               <ProfilePanel
                 profile={profile}
                 email={user.email ?? ''}
+                approvedHustles={completions.filter(completion => completion.status === 'approved').length}
+                currentPlanCode={currentPlanCode}
                 onProfileUpdated={(p) => setProfile(p)}
               />
             )}
             {tab === 'plans' && <SubscriptionPanel userId={user.id} onSelectPlan={(planCode) => { setSelectedPlanCode(planCode); setTab('payment'); }} />}
             {tab === 'payment' && selectedPlanCode && <PaymentSelectionPanel planCode={selectedPlanCode} onBack={() => setTab('plans')} />}
-            {tab === 'funding' && <FundAccountPanel userId={user.id} />}
-            {tab === 'support' && <SupportPanel />}
+            {tab === 'support' && <SupportPanel isPremium={currentPlanCode !== 'free'} prioritySupport={featureAccess['priority-support'] !== false} />}
           </div>
         </main>
       </div>

@@ -29,7 +29,7 @@ export default function App() {
   }
 
   if (!loaded || authLoading) {
-    return <Preloader onFinish={handlePreloaderFinish} />;
+    return <Preloader ready={!authLoading} onFinish={handlePreloaderFinish} />;
   }
 
   if (isPasswordReset) {

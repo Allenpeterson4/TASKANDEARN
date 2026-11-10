@@ -4,10 +4,10 @@ import { openExternalChat } from '@/lib/externalChat';
 
 const faqs = [
   { q: 'How long does withdrawal take?', a: 'Most withdrawals are processed within 2 hours. During peak periods it may take up to 24 hours.' },
-  { q: 'My task was not credited — what do I do?', a: 'Contact support with your task ID and we will investigate within 12 hours.' },
+  { q: 'My hustle was not credited — what do I do?', a: 'Contact support with your hustle details and we will investigate.' },
   { q: 'Can I refer more than 50 people?', a: 'Yes! There is no cap. Refer as many as you like and keep earning.' },
   { q: 'What is the minimum withdrawal?', a: 'The minimum withdrawal amount is ₦500.' },
-  { q: 'How do I upgrade my tier?', a: 'Tiers upgrade automatically as you complete more tasks and refer more members.' },
+  { q: 'How do I upgrade my tier?', a: 'Your Hustler badge grows as you complete hustles. Referral tiers grow as you invite more hustlers.' },
 ];
 
 function FAQ({ q, a }: { q: string; a: string }) {
@@ -25,7 +25,7 @@ function FAQ({ q, a }: { q: string; a: string }) {
   );
 }
 
-export default function SupportPanel() {
+export default function SupportPanel({ isPremium, prioritySupport }: { isPremium: boolean; prioritySupport: boolean }) {
   const [form, setForm] = useState({ subject: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
@@ -45,10 +45,11 @@ export default function SupportPanel() {
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {isPremium && prioritySupport && <div className="border border-orange-300/25 bg-orange-300/[0.05] px-4 py-3 text-sm text-orange-100">Premium priority support is active for this account.</div>}
       {/* Contact channels */}
       <div className="grid sm:grid-cols-3 gap-4">
         {[
-          { icon: MessageCircle, label: 'Live Chat', sub: 'Avg. response: 5 min', color: 'text-green-400 bg-green-400/10', action: 'Chat Now' },
+          { icon: MessageCircle, label: 'Live Chat', sub: isPremium && prioritySupport ? 'Priority response' : 'Avg. response: 5 min', color: 'text-green-400 bg-green-400/10', action: 'Chat Now' },
           { icon: Phone, label: 'Telegram', sub: 'Mon–Sun, 8am–10pm', color: 'text-sky-400 bg-sky-400/10', action: 'Message Us' },
           { icon: Mail, label: 'Email Support', sub: 'Within 24 hours', color: 'text-blue-400 bg-blue-400/10', action: 'Send Email' },
         ].map(ch => {
@@ -98,7 +99,7 @@ export default function SupportPanel() {
               <input
                 type="text"
                 required
-                placeholder="e.g. Task not credited"
+                placeholder="e.g. Hustle not credited"
                 value={form.subject}
                 onChange={set('subject')}
                 className="w-full bg-[#0a0a0a] border border-white/8 rounded-xl px-4 py-3 text-white text-sm placeholder-gray-600 focus:outline-none focus:border-amber-400/50 transition-colors"

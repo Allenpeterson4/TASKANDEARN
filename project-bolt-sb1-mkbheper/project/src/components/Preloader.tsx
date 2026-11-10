@@ -1,20 +1,24 @@
 import { useEffect, useState } from 'react';
+import BrandLogo from '@/components/BrandLogo';
 
 interface PreloaderProps {
+  ready: boolean;
   onFinish: () => void;
 }
 
-export default function Preloader({ onFinish }: PreloaderProps) {
+export default function Preloader({ ready, onFinish }: PreloaderProps) {
   const [fade, setFade] = useState(false);
 
   useEffect(() => {
+    if (!ready) return;
+
     const timer = setTimeout(() => setFade(true), 2200);
     const done = setTimeout(() => onFinish(), 2900);
     return () => {
       clearTimeout(timer);
       clearTimeout(done);
     };
-  }, [onFinish]);
+  }, [onFinish, ready]);
 
   return (
     <div
@@ -25,9 +29,7 @@ export default function Preloader({ onFinish }: PreloaderProps) {
       <div className="flex flex-col items-center gap-6 animate-pulse-slow">
         {/* Logo mark */}
         <div className="relative">
-          <div className="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-2xl shadow-amber-500/30">
-            <span className="text-white font-black text-4xl tracking-tight">M</span>
-          </div>
+          <BrandLogo variant="preloader" showWordmark={false} markClassName="w-24 h-24 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center overflow-hidden shadow-2xl shadow-amber-500/30" fallbackClassName="text-white font-black text-4xl tracking-tight" />
           <div className="absolute -inset-1 rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 opacity-20 blur-lg animate-pulse" />
         </div>
 

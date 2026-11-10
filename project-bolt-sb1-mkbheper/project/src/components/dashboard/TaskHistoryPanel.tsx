@@ -16,20 +16,20 @@ export default function TaskHistoryPanel({ tasks, completions }: Props) {
   ), 0);
   return (
     <div className="space-y-6">
-      <div><p className="text-xs font-bold uppercase tracking-wider text-amber-400">Activity</p><h2 className="mt-1 text-xl font-black text-white">Task History</h2><p className="mt-1 text-sm text-gray-400">Every task you have submitted and its current verification status.</p></div>
+      <div><p className="text-xs font-bold uppercase tracking-wider text-amber-400">Activity</p><h2 className="mt-1 text-xl font-black text-white">Hustle history</h2><p className="mt-1 text-sm text-gray-400">Every hustle you have submitted and its current verification status.</p></div>
       <div className="grid gap-4 md:grid-cols-2">
-        <MetricCard title="Completed-task earnings" subtitle="Approved reward performance" accent="green" icon={<CircleDollarSign size={18} />}>
+        <MetricCard title="Completed-hustle earnings" subtitle="Approved reward performance" accent="green" icon={<CircleDollarSign size={18} />}>
           <MetricItem icon={<CircleDollarSign size={15} />} label="All-time approved rewards" value={`₦${approvedEarnings.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`} />
-          <MetricItem icon={<BadgeCheck size={15} />} label="Approved tasks" value={history.filter(completion => completion.status === 'approved').length.toLocaleString()} />
+          <MetricItem icon={<BadgeCheck size={15} />} label="Approved hustles" value={history.filter(completion => completion.status === 'approved').length.toLocaleString()} />
         </MetricCard>
-        <MetricCard title="Task activity" subtitle="Your current verification pipeline" accent="amber" icon={<ClipboardList size={18} />}>
-          <MetricItem icon={<ClipboardList size={15} />} label="Tasks submitted" value={history.length.toLocaleString()} />
+        <MetricCard title="Hustle activity" subtitle="Your current verification pipeline" accent="amber" icon={<ClipboardList size={18} />}>
+          <MetricItem icon={<ClipboardList size={15} />} label="Hustles submitted" value={history.length.toLocaleString()} />
           <MetricItem icon={<Clock3 size={15} />} label="Awaiting review" value={history.filter(completion => completion.status === 'pending').length.toLocaleString()} />
         </MetricCard>
       </div>
       <section className="overflow-hidden border border-white/8 bg-[#111]">
-        <div className="hidden grid-cols-[minmax(0,1.5fr)_150px_130px_150px] gap-4 border-b border-white/8 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 sm:grid"><span>Task</span><span>Completed</span><span>Reward</span><span>Status</span></div>
-        {history.length === 0 ? <div className="py-16 text-center"><History size={36} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-500">Completed tasks will appear here.</p></div> : <div className="divide-y divide-white/8">{history.map(completion => { const task = taskMap.get(completion.task_id); return <article key={completion.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1.5fr)_150px_130px_150px] sm:items-center sm:gap-4"><div><p className="font-semibold text-white">{task?.title ?? 'Task'}</p><p className="mt-1 text-xs text-gray-500">{task?.category ?? 'Task activity'} · {task?.difficulty ?? 'Completed task'}</p></div><p className="text-xs text-gray-400">{new Date(completion.completed_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</p><p className="text-sm font-bold text-green-400">₦{Number(task?.reward ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p><Status status={completion.status} /></article>; })}</div>}
+        <div className="hidden grid-cols-[minmax(0,1.5fr)_150px_130px_150px] gap-4 border-b border-white/8 px-5 py-3 text-[11px] font-bold uppercase tracking-wider text-gray-500 sm:grid"><span>Hustle</span><span>Completed</span><span>Reward</span><span>Status</span></div>
+        {history.length === 0 ? <div className="py-16 text-center"><History size={36} className="mx-auto mb-3 text-gray-600" /><p className="text-sm text-gray-500">Completed hustles will appear here.</p></div> : <div className="divide-y divide-white/8">{history.map(completion => { const task = taskMap.get(completion.task_id); return <article key={completion.id} className="grid gap-3 px-5 py-4 sm:grid-cols-[minmax(0,1.5fr)_150px_130px_150px] sm:items-center sm:gap-4"><div><p className="font-semibold text-white">{task?.title ?? 'Hustle'}</p><p className="mt-1 text-xs text-gray-500">{task?.category ?? 'Hustle activity'} · {task?.difficulty ?? 'Completed hustle'}</p></div><p className="text-xs text-gray-400">{new Date(completion.completed_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'short', day: 'numeric' })}</p><p className="text-sm font-bold text-orange-300">₦{Number(task?.reward ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p><Status status={completion.status} /></article>; })}</div>}
       </section>
     </div>
   );
@@ -45,7 +45,7 @@ function MetricItem({ icon, label, value }: { icon: React.ReactNode; label: stri
 }
 
 function Status({ status }: { status: string }) {
-  if (status === 'approved') return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-green-400"><CheckCircle size={14} /> Approved</span>;
+  if (status === 'approved') return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-orange-300"><CheckCircle size={14} /> Approved</span>;
   if (status === 'rejected') return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-red-400"><XCircle size={14} /> Rejected</span>;
   return <span className="inline-flex items-center gap-1.5 text-xs font-bold text-amber-400"><Clock3 size={14} /> Pending review</span>;
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { User, Phone, Mail, Save, Loader2, CheckCircle, Camera, Lock, Eye, EyeOff } from 'lucide-react';
 import type { Profile } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
@@ -6,10 +6,12 @@ import { supabase } from '@/lib/supabase';
 interface Props {
   profile: Profile | null;
   email: string;
+  approvedHustles: number;
+  currentPlanCode: string;
   onProfileUpdated: (p: Profile) => void;
 }
 
-export default function ProfilePanel({ profile, email, onProfileUpdated }: Props) {
+export default function ProfilePanel({ profile, email, approvedHustles, currentPlanCode, onProfileUpdated }: Props) {
   const [form, setForm] = useState({
     full_name: profile?.full_name ?? '',
     username: profile?.username ?? '',
@@ -23,6 +25,15 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
   const [msg, setMsg] = useState('');
   const [pwMsg, setPwMsg] = useState('');
   const [publicPayoutOptIn, setPublicPayoutOptIn] = useState(profile?.public_activity_opt_in ?? false);
+  const [leaderboardOptIn, setLeaderboardOptIn] = useState(profile?.leaderboard_opt_in ?? false);
+  const [hustleScore, setHustleScore] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!profile?.user_id) return;
+    supabase.rpc('get_hustle_score', { p_user_id: profile.user_id }).then(({ data }) => {
+      if (typeof data === 'number') setHustleScore(data);
+    });
+  }, [profile?.user_id, approvedHustles]);
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setForm(prev => ({ ...prev, [k]: e.target.value }));
@@ -40,6 +51,7 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
     Platinum: 'from-blue-400 to-cyan-300',
   };
   const tc = tierColors[profile?.tier ?? 'Bronze'] ?? tierColors.Bronze;
+  const hustleBadge = approvedHustles >= 1000 ? 'President' : approvedHustles >= 500 ? 'Odogwu Hustler' : approvedHustles >= 100 ? 'Oga Hustler' : approvedHustles >= 50 ? 'Street Hustler' : approvedHustles >= 25 ? 'Pako Hustler' : approvedHustles >= 10 ? 'Nepo Hustler' : 'Baby Hustler';
 
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -96,6 +108,7 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
           username: form.username,
           phone: form.phone,
           public_activity_opt_in: publicPayoutOptIn,
+          leaderboard_opt_in: leaderboardOptIn,
         })
         .eq('user_id', profile.user_id)
         .select()
@@ -156,14 +169,16 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
           <p className="text-gray-400 text-sm mt-0.5">@{form.username || 'username'}</p>
           <div className="flex items-center gap-2 mt-2">
             <span className={`px-2.5 py-1 rounded-lg text-xs font-black bg-gradient-to-r ${tc} text-black`}>
-              {profile?.tier ?? 'Bronze'} Member
+              {hustleBadge}
             </span>
+            {currentPlanCode !== 'free' && <span className="rounded-lg border border-orange-300/30 bg-orange-300/10 px-2.5 py-1 text-xs font-black text-orange-200">Premium</span>}
             {profile?.referral_code && (
               <span className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-white/5 text-gray-300 border border-white/8">
                 Code: {profile.referral_code}
               </span>
             )}
           </div>
+          <p className="mt-2 text-xs text-gray-400">Referral tier: {profile?.tier ?? 'Bronze'} · Hustle Score: <strong className="text-white">{hustleScore === null ? '—' : `${hustleScore}/100`}</strong></p>
         </div>
       </div>
 
@@ -237,6 +252,10 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
           <label className="flex items-start gap-3 border border-white/8 p-3 text-sm text-gray-300">
             <input type="checkbox" checked={publicPayoutOptIn} onChange={event => setPublicPayoutOptIn(event.target.checked)} className="mt-0.5 accent-amber-400" />
             <span>Allow my completed payouts to appear in the public activity feed with my name masked. This is optional and can be changed anytime.</span>
+          </label>
+          <label className="flex items-start gap-3 border border-white/8 p-3 text-sm text-gray-300">
+            <input type="checkbox" checked={leaderboardOptIn} onChange={event => setLeaderboardOptIn(event.target.checked)} className="mt-0.5 accent-amber-400" />
+            <span>Show my name and profile photo on the Hustler leaderboard. You can change this anytime.</span>
           </label>
 
           {msg && (
@@ -327,7 +346,7 @@ export default function ProfilePanel({ profile, email, onProfileUpdated }: Props
         <h3 className="text-white font-bold text-sm mb-4">Account Details</h3>
         <div className="space-y-3">
           {[
-            { label: 'Member Since', value: profile?.joined_at ? new Date(profile.joined_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }) : '—' },
+            { label: 'Hustler Since', value: profile?.joined_at ? new Date(profile.joined_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long', day: 'numeric' }) : '—' },
             { label: 'Account Tier', value: profile?.tier ?? 'Bronze' },
             { label: 'Referral Code', value: profile?.referral_code ?? '—' },
           ].map(row => (

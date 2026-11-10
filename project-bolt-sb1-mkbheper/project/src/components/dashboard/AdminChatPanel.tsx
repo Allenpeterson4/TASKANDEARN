@@ -142,7 +142,7 @@ export default function AdminChatPanel() {
                 return <div key={message.id} className={`max-w-[85%] ${isAdminMessage ? 'ml-auto' : 'mr-auto'}`}><p className={`whitespace-pre-wrap break-words px-3 py-2 text-sm ${isAdminMessage ? 'bg-emerald-300 text-black' : 'bg-white/8 text-gray-200'}`}>{message.body}</p><time className="mt-1 block text-[10px] text-gray-500">{new Date(message.created_at).toLocaleString('en-NG')}</time></div>;
               })}
             </div>
-            {selectedConversation.status === 'open' && <form onSubmit={sendReply} className="flex gap-2 border-t border-white/10 p-3"><input value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} placeholder="Reply to member" className="admin-input min-w-0 flex-1" /><button disabled={sending || !draft.trim()} aria-label="Send reply" className="flex h-10 w-10 items-center justify-center bg-emerald-300 text-black disabled:opacity-40"><Send size={15} /></button></form>}
+            {selectedConversation.status === 'open' && <form onSubmit={sendReply} className="flex gap-2 border-t border-white/10 p-3"><input value={draft} onChange={event => setDraft(event.target.value)} maxLength={4000} placeholder="Reply to hustler" className="admin-input min-w-0 flex-1" /><button disabled={sending || !draft.trim()} aria-label="Send reply" className="flex h-10 w-10 items-center justify-center bg-emerald-300 text-black disabled:opacity-40"><Send size={15} /></button></form>}
           </>
         ) : <div className="flex flex-1 items-center justify-center p-8 text-center text-sm text-gray-500">Select an open support conversation to reply.</div>}
       </section>

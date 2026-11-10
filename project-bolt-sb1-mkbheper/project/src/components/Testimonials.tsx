@@ -6,7 +6,7 @@ const testimonials = [
     location: 'Lagos, Nigeria',
     role: 'Student',
     content:
-      'I was skeptical at first, but MrHustler actually pays! I completed a few tasks between lectures and had money in my account before dinner. This platform is the real deal.',
+      'I was skeptical at first, but MrHustler actually pays! I completed a few hustles between lectures and had money in my account before dinner. This platform is the real deal.',
     rating: 5,
     avatar: 'AC',
     color: 'from-amber-400 to-orange-500',
@@ -36,7 +36,7 @@ const testimonials = [
     location: 'Kano, Nigeria',
     role: 'Graduate',
     content:
-      'As a fresh graduate looking for income while job hunting, MrHustler has been a lifesaver. The tasks are straightforward and the support team actually responds quickly.',
+      'As a fresh graduate looking for income while job hunting, MrHustler has been a lifesaver. The hustles are straightforward and the support team actually responds quickly.',
     rating: 5,
     avatar: 'YA',
     color: 'from-purple-400 to-purple-600',

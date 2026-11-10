@@ -1,5 +1,6 @@
 import { ArrowRight, Twitter, Instagram, Facebook, Youtube } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import BrandLogo from '@/components/BrandLogo';
 
 const footerLinks = {
   Platform: ['How It Works', 'Features', 'Referral Program', 'Testimonials', 'Pricing'],
@@ -62,17 +63,10 @@ export default function Footer() {
         <div className="grid lg:grid-cols-5 gap-12 mb-12">
           {/* Brand col */}
           <div className="lg:col-span-1">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center">
-                <span className="text-white font-black text-xl">M</span>
-              </div>
-              <span className="text-white font-black text-xl">
-                Mr<span className="text-amber-400">Hustler</span>
-              </span>
-            </div>
+            <BrandLogo className="mb-4 flex items-center gap-3" markClassName="h-10 w-10 overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center" wordmarkClassName="text-white font-black text-xl" fallbackClassName="text-white font-black text-xl" />
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               Nigeria's most trusted platform for earning real Naira through
-              simple online tasks and referrals.
+              simple online hustles and referrals.
             </p>
             {/* Socials */}
             <div className="flex gap-2">

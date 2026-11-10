@@ -44,7 +44,7 @@ const values = [
     icon: Heart,
     title: 'Values',
     description:
-      'Transparency in every payout. Integrity in every task. Genuine care for the financial well-being of every member of our community.',
+      'Transparency in every payout. Integrity in every hustle. Genuine care for the financial well-being of every hustler in our community.',
     color: 'text-rose-400',
     bg: 'bg-rose-400/10',
   },
@@ -89,7 +89,7 @@ export default function About() {
                 Our founding team combined decades of experience in fintech,
                 digital marketing, and community building to create something
                 different. A platform that pays on time, every time. A community
-                where every member grows together. A brand that Nigerians can be
+                where every hustler grows together. A brand that Nigerians can be
                 proud of.
               </p>
               <p>

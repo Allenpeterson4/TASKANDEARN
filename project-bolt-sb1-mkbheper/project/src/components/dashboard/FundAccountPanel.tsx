@@ -10,6 +10,7 @@ const emptySettings: FundingSettings = { enabled: false, bank_name: '', account_
 export default function FundAccountPanel({ userId }: { userId: string }) {
   const [settings, setSettings] = useState(emptySettings);
   const [deposits, setDeposits] = useState<Deposit[]>([]);
+  const [fundBalance, setFundBalance] = useState(0);
   const [method, setMethod] = useState<'paystack' | 'flutterwave' | 'manual'>('paystack');
   const [amount, setAmount] = useState('');
   const [proof, setProof] = useState('');
@@ -20,13 +21,15 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
 
   const load = useCallback(async () => {
     setLoading(true);
-    const [settingsResult, depositsResult] = await Promise.all([
+    const [settingsResult, depositsResult, balanceResult] = await Promise.all([
       supabase.from('funding_settings').select('enabled, bank_name, account_name, account_number, instructions').eq('singleton', true).maybeSingle(),
       supabase.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at, review_note').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
+      supabase.from('balances').select('fund_balance').eq('user_id', userId).maybeSingle(),
     ]);
-    if (settingsResult.error || depositsResult.error) setMessage((settingsResult.error ?? depositsResult.error)?.message ?? 'Could not load funding details.');
+    if (settingsResult.error || depositsResult.error || balanceResult.error) setMessage((settingsResult.error ?? depositsResult.error ?? balanceResult.error)?.message ?? 'Could not load funding details.');
     setSettings((settingsResult.data as FundingSettings | null) ?? emptySettings);
     setDeposits((depositsResult.data ?? []) as Deposit[]);
+    setFundBalance(Number(balanceResult.data?.fund_balance ?? 0));
     setLoading(false);
   }, [userId]);
 
@@ -46,7 +49,7 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
       }
       const { error } = await supabase.rpc('submit_funding_deposit', { p_amount: Number(amount), p_payment_method: method, p_proof_text: method === 'manual' ? proof : null, p_proof_path: uploadedPath });
       if (error) throw error;
-      setMessage(method === 'manual' ? 'Payment proof submitted. Admin approval is required before funds are added.' : `${method === 'paystack' ? 'Paystack' : 'Flutterwave'} payment initialized. Funds are added automatically after provider confirmation.`);
+      setMessage(method === 'manual' ? 'Payment proof submitted. Admin approval is required before your Fund Wallet is credited.' : `${method === 'paystack' ? 'Paystack' : 'Flutterwave'} payment initialized. Your Fund Wallet is credited after provider confirmation.`);
       setAmount(''); setProof(''); setProofFile(undefined);
       await load();
     } catch (error) {
@@ -59,13 +62,13 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      <div><p className="text-xs font-bold uppercase tracking-wider text-amber-400">Wallet funding</p><h2 className="mt-1 text-xl font-black text-white">Fund Account</h2><p className="mt-1 text-sm text-gray-400">Add money to your reward wallet separately from membership plans.</p></div>
+      <div className="border border-orange-400/20 bg-orange-400/[0.04] p-5"><p className="text-xs font-bold uppercase tracking-wider text-orange-200">Fund Wallet</p><p className="mt-2 text-3xl font-black text-white">₦{fundBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p><p className="mt-1 text-xs text-gray-400">Deposited funds are reserved for campaign sponsorship.</p></div>
       {message && <div role="status" className="border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">{message}</div>}
       {loading ? <div className="flex min-h-40 items-center justify-center text-gray-400"><Loader2 className="mr-2 animate-spin" size={17} /> Loading funding options</div> : !settings.enabled ? <div className="border border-blue-400/20 bg-blue-400/5 p-5 text-sm text-blue-300">Wallet funding is temporarily unavailable. Please check back when the admin enables a deposit method.</div> : (
         <>
           <div className="grid gap-4 lg:grid-cols-2">
             <section className="border border-white/8 bg-[#111] p-5">
-              <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-green-400/10"><Banknote size={18} className="text-green-400" /></div><div><h3 className="font-bold text-white">Manual bank transfer</h3><p className="text-xs text-gray-400">Admin verifies your proof before crediting your wallet.</p></div></div>
+              <div className="flex items-center gap-3"><div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-400/10"><Banknote size={18} className="text-orange-300" /></div><div><h3 className="font-bold text-white">Manual bank transfer</h3><p className="text-xs text-gray-400">Admin verifies your proof before crediting your Fund Wallet.</p></div></div>
               <div className="mt-5 space-y-3 text-sm"><Detail label="Bank" value={settings.bank_name} onCopy={copy} /><Detail label="Account name" value={settings.account_name} onCopy={copy} /><Detail label="Account number" value={settings.account_number} onCopy={copy} /></div>
               <p className="mt-4 text-xs leading-relaxed text-gray-400">{settings.instructions}</p>
             </section>
