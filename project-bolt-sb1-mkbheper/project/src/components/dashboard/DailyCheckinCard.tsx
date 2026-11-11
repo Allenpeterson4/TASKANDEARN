@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { CalendarCheck, Loader2 } from 'lucide-react';
+import { CalendarCheck, Check, Loader2 } from 'lucide-react';
 import type { Balance } from '@/lib/supabase';
 import { supabase } from '@/lib/supabase';
 
@@ -45,7 +45,7 @@ export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUp
     setLoading(false);
   }
 
-  if (claimedToday) return <p role="status" className="text-xs text-orange-200">{message || `Daily hustle check-in claimed. Your current streak is ${checkin?.streak ?? 1} day${checkin?.streak === 1 ? '' : 's'}.`}</p>;
+  if (claimedToday) return <div role="status" className="inline-flex items-center gap-2 rounded-full border border-white/8 bg-white/5 px-3 py-2 text-xs text-gray-300"><CalendarCheck size={14} className="text-amber-400" /><span>Checked in</span><Check size={13} className="text-emerald-400" /><span className="text-gray-500">{checkin?.streak ?? 1}-day streak</span></div>;
 
   return (
     <section className="flex flex-wrap items-center justify-between gap-4 border border-orange-400/20 bg-orange-400/[0.04] px-4 py-3" aria-label="Daily hustle check-in">

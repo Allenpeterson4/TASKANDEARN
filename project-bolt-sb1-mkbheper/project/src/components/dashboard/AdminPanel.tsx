@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import type { User } from '@supabase/supabase-js';
 import {
   BadgeCheck,
+  Ban,
   CalendarClock,
   Check,
   ChevronLeft,
@@ -16,10 +17,12 @@ import {
   LogOut,
   Plus,
   Search,
+  Send,
   ShieldCheck,
   Shuffle,
   Trash2,
   Users,
+  UserRound,
   X,
   Package,
   MessageCircle,
@@ -28,6 +31,8 @@ import {
   ChevronUp,
   ChevronDown,
   Megaphone,
+  Palette,
+  Mail,
 } from 'lucide-react';
 import { supabase, type Profile, type Task, type TaskCompletion, type Withdrawal } from '@/lib/supabase';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -38,21 +43,27 @@ import AdminPayoutSettingsPanel from './AdminPayoutSettingsPanel';
 import AdminSubscriptionReviewPanel from './AdminSubscriptionReviewPanel';
 import AdminFundingPanel from './AdminFundingPanel';
 import AdminSupportSettingsPanel from './AdminSupportSettingsPanel';
+import AdminChatPanel from './AdminChatPanel';
 import AdminMetricsPanel from './AdminMetricsPanel';
 import AdminAdBannerPanel from './AdminAdBannerPanel';
 import AdminPlatformSettingsPanel from './AdminPlatformSettingsPanel';
 import AdminCampaignPanel from './AdminCampaignPanel';
 import AdminAnnouncementPanel from './AdminAnnouncementPanel';
 import AdminBrandingPanel from './AdminBrandingPanel';
+import AdminThemeColorsPanel from './AdminThemeColorsPanel';
+import AdminEmailPanel from './AdminEmailPanel';
 
-type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding';
+type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportTickets' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding' | 'colors' | 'email';
 type AccountStatus = 'active' | 'suspended' | 'banned';
 type VerificationMode = 'manual' | 'automatic';
-type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at'> & {
+type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at' | 'avatar_url'> & {
   account_status: AccountStatus;
   status_reason: string | null;
 };
 type AdminBalance = { user_id: string; reward_balance: number; referral_balance: number; fund_balance: number; total_earned: number };
+type AdminLedgerEntry = { id: string; balance_type: string; amount: number; balance_before: number; balance_after: number; reason: string; created_at: string };
+type AdminFundingRecord = { id: string; amount: number; payment_method: string; provider_reference: string | null; status: string; created_at: string };
+type AdminAccountSnapshot = { balance: AdminBalance | null; ledger: AdminLedgerEntry[]; withdrawals: Withdrawal[]; funding: AdminFundingRecord[] };
 type AdminCompletion = TaskCompletion & { task?: Pick<Task, 'title' | 'reward'> };
 type FraudFlag = { user_id: string; flag: string; matched_accounts: number };
 type AdminUserDetails = {
@@ -102,6 +113,7 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'payoutSettings', label: 'Payout schedule', icon: CalendarClock },
   { id: 'planSubmissions', label: 'Plan approvals', icon: BadgeCheck },
   { id: 'funding', label: 'Wallet funding', icon: CircleDollarSign },
+  { id: 'supportTickets', label: 'Support tickets', icon: MessageCircle },
   { id: 'supportSettings', label: 'Live chat settings', icon: MessageCircle },
   { id: 'content', label: 'CMS & media', icon: FileText },
   { id: 'plans', label: 'Plans', icon: Package },
@@ -111,6 +123,8 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'campaigns', label: 'Campaign approvals', icon: Megaphone },
   { id: 'announcement', label: 'Welcome popup', icon: FileText },
   { id: 'branding', label: 'Brand images', icon: Image },
+  { id: 'colors', label: 'Colors & theme', icon: Palette },
+  { id: 'email', label: 'Email & templates', icon: Mail },
 ];
 
 interface Props {
@@ -145,8 +159,11 @@ export default function AdminPanel({ user }: Props) {
   const [references, setReferences] = useState<Record<string, string>>({});
   const [selectedUser, setSelectedUser] = useState<AdminProfile | null>(null);
   const [userDetails, setUserDetails] = useState<AdminUserDetails | null>(null);
+  const [userAccountSnapshot, setUserAccountSnapshot] = useState<AdminAccountSnapshot | null>(null);
   const [userDetailLoading, setUserDetailLoading] = useState(false);
   const [resetLink, setResetLink] = useState('');
+  const [messageUser, setMessageUser] = useState<AdminProfile | null>(null);
+  const [adminMessageDraft, setAdminMessageDraft] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -158,7 +175,7 @@ export default function AdminPanel({ user }: Props) {
       const [taskResult, profileResult, completionResult, withdrawalResult] = await Promise.all([
         supabase.from('tasks').select('*').order('sort_order').order('created_at', { ascending: false }),
         supabase.from('profiles')
-          .select('user_id, full_name, username, phone, tier, joined_at, account_status, status_reason', { count: 'exact' })
+          .select('user_id, full_name, username, phone, tier, joined_at, account_status, status_reason, avatar_url', { count: 'exact' })
           .order('joined_at', { ascending: false })
           .range(start, start + 49),
         supabase.from('task_completions').select('*').order('completed_at', { ascending: false }).limit(100),
@@ -223,12 +240,26 @@ export default function AdminPanel({ user }: Props) {
   async function openUserDetail(profile: AdminProfile) {
     setSelectedUser(profile);
     setUserDetails(null);
+    setUserAccountSnapshot(null);
     setResetLink('');
     setUserDetailLoading(true);
-    const { data, error } = await supabase.rpc('admin_user_details', { p_user_id: profile.user_id });
+    const [detailsResult, balanceResult, ledgerResult, withdrawalsResult, fundingResult] = await Promise.all([
+      supabase.rpc('admin_user_details', { p_user_id: profile.user_id }),
+      supabase.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').eq('user_id', profile.user_id).maybeSingle(),
+      supabase.from('wallet_ledger').select('id, balance_type, amount, balance_before, balance_after, reason, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
+      supabase.from('withdrawals').select('*').eq('user_id', profile.user_id).order('requested_at', { ascending: false }).limit(50),
+      supabase.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
+    ]);
     setUserDetailLoading(false);
+    const error = detailsResult.error ?? balanceResult.error ?? ledgerResult.error ?? withdrawalsResult.error ?? fundingResult.error;
     if (error) return notify(error.message);
-    setUserDetails(data as AdminUserDetails);
+    setUserDetails(detailsResult.data as AdminUserDetails);
+    setUserAccountSnapshot({
+      balance: balanceResult.data as AdminBalance | null,
+      ledger: (ledgerResult.data ?? []) as AdminLedgerEntry[],
+      withdrawals: (withdrawalsResult.data ?? []) as Withdrawal[],
+      funding: (fundingResult.data ?? []) as AdminFundingRecord[],
+    });
   }
 
   async function createPasswordResetLink() {
@@ -237,6 +268,26 @@ export default function AdminPanel({ user }: Props) {
     if (error) return notify(error.message);
     setResetLink((data as { action_link?: string }).action_link ?? '');
     notify('Recovery link generated. Share it with the account owner through a verified channel.');
+  }
+
+  async function sendAdminMessage(event: React.FormEvent) {
+    event.preventDefault();
+    if (!messageUser || !adminMessageDraft.trim()) return;
+    setSaving(true);
+    const { data: conversationId, error: conversationError } = await supabase.rpc('admin_start_support_conversation', { p_user_id: messageUser.user_id });
+    if (conversationError || !conversationId) {
+      setSaving(false);
+      return notify(conversationError?.message ?? 'Could not open a support conversation.');
+    }
+    const { error } = await supabase.rpc('send_support_message', {
+      p_conversation_id: conversationId,
+      p_body: adminMessageDraft.trim(),
+    });
+    setSaving(false);
+    if (error) return notify(error.message);
+    setMessageUser(null);
+    setAdminMessageDraft('');
+    notify('Message sent to the user in support chat.');
   }
 
   function notify(text: string) {
@@ -468,7 +519,6 @@ export default function AdminPanel({ user }: Props) {
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
-        <AdminMetricsPanel />
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-300">Operations</p>
@@ -481,14 +531,15 @@ export default function AdminPanel({ user }: Props) {
           </div>
         </div>
 
-        <nav className="mb-6 flex gap-2 overflow-x-auto border-b border-white/8 pb-3" aria-label="Admin sections">
+        <div className="grid gap-6 lg:grid-cols-[230px_minmax(0,1fr)] lg:items-start">
+        <nav className="mb-6 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:sticky lg:top-24 lg:mb-0 lg:flex lg:max-h-[calc(100vh-7rem)] lg:flex-col lg:overflow-y-auto lg:border-r lg:border-white/8 lg:pr-4" aria-label="Admin sections">
           {sections.map(item => {
             const Icon = item.icon;
             return (
               <button
                 key={item.id}
                 onClick={() => setSection(item.id)}
-                className={`flex shrink-0 items-center gap-2 rounded-lg px-3 py-2 text-sm font-semibold transition-colors ${
+                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-left text-sm font-semibold transition-colors lg:w-full ${
                   section === item.id ? 'bg-emerald-300 text-black' : 'text-gray-400 hover:bg-white/5 hover:text-white'
                 }`}
               >
@@ -498,6 +549,8 @@ export default function AdminPanel({ user }: Props) {
           })}
         </nav>
 
+        <div className="min-w-0">
+        <AdminMetricsPanel />
         {message && (
           <div className="mb-5 flex items-center justify-between gap-3 rounded-lg border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-200" role="status">
             {message}
@@ -618,7 +671,7 @@ export default function AdminPanel({ user }: Props) {
                         const balance = userBalances.get(profile.user_id);
                         return (
                           <tr key={profile.user_id}>
-                            <td className="py-3 pr-4"><button onClick={() => void openUserDetail(profile)} className="text-left font-semibold hover:text-amber-200">{profile.full_name || profile.username}</button><p className="text-xs text-gray-500">@{profile.username} · {profile.phone || 'No phone'}</p>{(userRiskFlags.get(profile.user_id) ?? []).map(flag => <span key={flag.flag} className="mt-1 mr-1 inline-block border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] text-red-200">Risk: {flag.flag} ({flag.matched_accounts})</span>)}</td>
+                            <td className="py-3 pr-4"><div className="flex items-center gap-3"><button onClick={() => void openUserDetail(profile)} aria-label={`View ${profile.full_name || profile.username} profile`} className="flex h-10 w-10 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 text-gray-400">{profile.avatar_url ? <img src={profile.avatar_url} alt="" className="h-full w-full object-cover" /> : <UserRound size={18} />}</button><div className="min-w-0"><button onClick={() => void openUserDetail(profile)} className="text-left font-semibold hover:text-amber-200">{profile.full_name || profile.username}</button><p className="text-xs text-gray-500">@{profile.username} · {profile.phone || 'No phone'}</p>{(userRiskFlags.get(profile.user_id) ?? []).map(flag => <span key={flag.flag} className="mt-1 mr-1 inline-block border border-red-400/30 bg-red-400/10 px-2 py-0.5 text-[10px] text-red-200">Risk: {flag.flag} ({flag.matched_accounts})</span>)}</div></div></td>
                             <td className="py-3 pr-4 text-gray-300">{profile.tier}</td>
                             <td className="py-3 pr-4">
                               <select
@@ -725,31 +778,61 @@ export default function AdminPanel({ user }: Props) {
             {section === 'payoutSettings' && <AdminPayoutSettingsPanel />}
             {section === 'planSubmissions' && <AdminSubscriptionReviewPanel />}
             {section === 'funding' && <AdminFundingPanel />}
+            {section === 'supportTickets' && <AdminChatPanel />}
             {section === 'supportSettings' && <AdminSupportSettingsPanel />}
             {section === 'advertisement' && <AdminAdBannerPanel />}
             {section === 'controls' && <AdminPlatformSettingsPanel />}
             {section === 'campaigns' && <AdminCampaignPanel />}
             {section === 'announcement' && <AdminAnnouncementPanel />}
             {section === 'branding' && <AdminBrandingPanel />}
+            {section === 'colors' && <AdminThemeColorsPanel />}
+            {section === 'email' && <AdminEmailPanel />}
           </>
         )}
+        </div>
+        </div>
       </main>
 
       {selectedUser && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setSelectedUser(null); }}>
-          <section role="dialog" aria-modal="true" aria-label="User activity details" className="max-h-[90vh] w-full max-w-3xl overflow-y-auto border border-white/10 bg-[#111] p-5 shadow-2xl sm:p-6">
+          <section role="dialog" aria-modal="true" aria-label="User activity details" className="max-h-[90vh] w-full max-w-5xl overflow-y-auto border border-white/10 bg-[#111] p-5 shadow-2xl sm:p-6">
             <header className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-              <div><p className="text-xs font-bold uppercase text-amber-300">Account activity</p><h2 className="mt-1 text-lg font-bold">{selectedUser.full_name || selectedUser.username}</h2><p className="text-xs text-gray-500">@{selectedUser.username} · Registered {selectedUser.joined_at ? new Date(selectedUser.joined_at).toLocaleString('en-NG') : 'unknown'}</p></div>
-              <button onClick={() => setSelectedUser(null)} aria-label="Close user details" className="p-2 text-gray-400 hover:text-white"><X size={18} /></button>
+              <div className="flex min-w-0 items-center gap-3"><div className="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-full border border-white/10 bg-white/5 text-gray-400">{selectedUser.avatar_url ? <img src={selectedUser.avatar_url} alt="" className="h-full w-full object-cover" /> : <UserRound size={20} />}</div><div className="min-w-0"><p className="text-xs font-bold uppercase text-amber-300">Account activity</p><h2 className="mt-1 truncate text-lg font-bold">{selectedUser.full_name || selectedUser.username}</h2><p className="text-xs text-gray-500">@{selectedUser.username} · Registered {selectedUser.joined_at ? new Date(selectedUser.joined_at).toLocaleString('en-NG') : 'unknown'}</p></div></div>
+              <div className="flex shrink-0 flex-wrap justify-end gap-2">
+                <button onClick={() => { setMessageUser(selectedUser); setAdminMessageDraft(''); setSelectedUser(null); }} className="inline-flex items-center gap-1.5 border border-white/10 px-2.5 py-2 text-xs text-gray-300 hover:bg-white/5"><MessageCircle size={14} />Message</button>
+                <button onClick={() => { setWalletUser(selectedUser); setSelectedUser(null); }} className="inline-flex items-center gap-1.5 border border-emerald-300/20 px-2.5 py-2 text-xs text-emerald-200 hover:bg-emerald-300/10"><CircleDollarSign size={14} />Adjust</button>
+                <button onClick={() => { setStatusReason(''); setStatusTarget({ profile: selectedUser, status: 'suspended' }); setSelectedUser(null); }} className="inline-flex items-center gap-1.5 border border-amber-300/20 px-2.5 py-2 text-xs text-amber-200 hover:bg-amber-300/10"><ShieldCheck size={14} />Restrict</button>
+                <button onClick={() => { setStatusReason(''); setStatusTarget({ profile: selectedUser, status: 'banned' }); setSelectedUser(null); }} className="inline-flex items-center gap-1.5 border border-red-300/20 px-2.5 py-2 text-xs text-red-200 hover:bg-red-300/10"><Ban size={14} />Block</button>
+                <button onClick={() => setSelectedUser(null)} aria-label="Close user details" className="p-2 text-gray-400 hover:text-white"><X size={18} /></button>
+              </div>
             </header>
             {userDetailLoading ? <p className="py-10 text-center text-sm text-gray-400"><Loader2 className="mr-2 inline animate-spin" size={16} />Loading account activity</p> : userDetails && <div className="space-y-5 py-5">
               <dl className="grid gap-3 text-sm sm:grid-cols-2"><div><dt className="text-xs text-gray-500">Email</dt><dd className="break-all">{userDetails.email || 'Unavailable'}</dd></div><div><dt className="text-xs text-gray-500">Phone</dt><dd>{selectedUser.phone || 'Unavailable'}</dd></div><div><dt className="text-xs text-gray-500">Username</dt><dd>@{userDetails.username}</dd></div><div><dt className="text-xs text-gray-500">Status</dt><dd className="capitalize">{userDetails.account_status}</dd></div></dl>
+              <section><h3 className="mb-2 text-sm font-bold">Account balances</h3><div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{[
+                ['Hustler wallet', userAccountSnapshot?.balance?.reward_balance ?? 0],
+                ['Referral wallet', userAccountSnapshot?.balance?.referral_balance ?? 0],
+                ['Fund wallet', userAccountSnapshot?.balance?.fund_balance ?? 0],
+                ['Lifetime earned', userAccountSnapshot?.balance?.total_earned ?? 0],
+              ].map(([label, amount]) => <div key={label} className="border border-white/8 bg-white/[0.025] p-3"><p className="text-xs text-gray-500">{label}</p><p className="mt-1 font-bold">₦{Number(amount).toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p></div>)}</div></section>
+              <section><h3 className="mb-2 text-sm font-bold">Wallet transaction history</h3><div className="overflow-x-auto border-y border-white/8"><table className="w-full min-w-[640px] text-left text-xs"><thead className="text-gray-500"><tr><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Wallet</th><th className="py-2 pr-3">Amount</th><th className="py-2 pr-3">Balance after</th><th className="py-2">Reason</th></tr></thead><tbody className="divide-y divide-white/5">{userAccountSnapshot?.ledger.map(entry => <tr key={entry.id}><td className="py-2 pr-3 text-gray-400">{new Date(entry.created_at).toLocaleString('en-NG')}</td><td className="py-2 pr-3 capitalize">{entry.balance_type}</td><td className={`py-2 pr-3 font-semibold ${entry.amount < 0 ? 'text-red-300' : 'text-emerald-300'}`}>{entry.amount < 0 ? '-' : '+'}₦{Math.abs(Number(entry.amount)).toLocaleString('en-NG')}</td><td className="py-2 pr-3">₦{Number(entry.balance_after).toLocaleString('en-NG')}</td><td className="max-w-xs truncate py-2 text-gray-400">{entry.reason}</td></tr>)}</tbody></table>{!userAccountSnapshot?.ledger.length && <p className="py-4 text-xs text-gray-500">No wallet transactions recorded.</p>}</div></section>
+              <section><h3 className="mb-2 text-sm font-bold">Withdrawals</h3><div className="overflow-x-auto border-y border-white/8"><table className="w-full min-w-[600px] text-left text-xs"><thead className="text-gray-500"><tr><th className="py-2 pr-3">Requested</th><th className="py-2 pr-3">Wallet</th><th className="py-2 pr-3">Amount</th><th className="py-2 pr-3">Status</th><th className="py-2">Transaction reference</th></tr></thead><tbody className="divide-y divide-white/5">{userAccountSnapshot?.withdrawals.map(withdrawal => <tr key={withdrawal.id}><td className="py-2 pr-3 text-gray-400">{new Date(withdrawal.requested_at).toLocaleString('en-NG')}</td><td className="py-2 pr-3 capitalize">{withdrawal.wallet_type ?? 'hustler'}</td><td className="py-2 pr-3">₦{Number(withdrawal.amount).toLocaleString('en-NG')}</td><td className="py-2 pr-3 capitalize">{withdrawal.status}</td><td className="py-2 text-gray-400">{withdrawal.transaction_reference || '—'}</td></tr>)}</tbody></table>{!userAccountSnapshot?.withdrawals.length && <p className="py-4 text-xs text-gray-500">No withdrawal requests recorded.</p>}</div></section>
+              <section><h3 className="mb-2 text-sm font-bold">Funding transactions</h3><div className="overflow-x-auto border-y border-white/8"><table className="w-full min-w-[520px] text-left text-xs"><thead className="text-gray-500"><tr><th className="py-2 pr-3">Date</th><th className="py-2 pr-3">Method</th><th className="py-2 pr-3">Amount</th><th className="py-2 pr-3">Status</th><th className="py-2">Reference</th></tr></thead><tbody className="divide-y divide-white/5">{userAccountSnapshot?.funding.map(record => <tr key={record.id}><td className="py-2 pr-3 text-gray-400">{new Date(record.created_at).toLocaleString('en-NG')}</td><td className="py-2 pr-3 capitalize">{record.payment_method}</td><td className="py-2 pr-3">₦{Number(record.amount).toLocaleString('en-NG')}</td><td className="py-2 pr-3 capitalize">{record.status}</td><td className="py-2 text-gray-400">{record.provider_reference || '—'}</td></tr>)}</tbody></table>{!userAccountSnapshot?.funding.length && <p className="py-4 text-xs text-gray-500">No funding transactions recorded.</p>}</div></section>
               <section><h3 className="mb-2 text-sm font-bold">Login devices and IP addresses</h3><div className="divide-y divide-white/8 border-y border-white/8">{userDetails.login_history.map((login, index) => <div key={`${login.created_at}-${index}`} className="grid gap-1 py-3 sm:grid-cols-[1fr_1.5fr_auto]"><span className="text-xs text-amber-200">{login.ip_address || 'IP unavailable'}</span><span className="break-all text-xs text-gray-400">{login.user_agent || 'Device unavailable'}</span><time className="text-xs text-gray-500">{new Date(login.created_at).toLocaleString('en-NG')}</time></div>)}{userDetails.login_history.length === 0 && <p className="py-4 text-xs text-gray-500">No login history recorded.</p>}</div></section>
               <section><h3 className="mb-2 text-sm font-bold">Shared-IP account comparisons</h3><div className="flex flex-wrap gap-2">{userDetails.ip_matches.slice(0, 20).map((match, index) => <span key={`${match.user_id}-${index}`} className="border border-red-400/20 bg-red-400/5 px-2 py-1 text-xs text-red-200">@{match.username} · {match.ip_address}</span>)}{userDetails.ip_matches.length === 0 && <p className="text-xs text-gray-500">No shared IP matches detected.</p>}</div></section>
               <section><h3 className="mb-2 text-sm font-bold">Registered referrals</h3><div className="flex flex-wrap gap-2">{userDetails.referred_users.map(referred => <span key={referred.user_id} className="border border-white/10 px-2 py-1 text-xs text-gray-300">@{referred.username} · {new Date(referred.joined_at).toLocaleDateString('en-NG')}</span>)}{userDetails.referred_users.length === 0 && <p className="text-xs text-gray-500">No referred accounts recorded.</p>}</div></section>
               <section className="border-t border-white/10 pt-4"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Password recovery</h3><p className="mt-1 text-xs text-gray-500">Generate a recovery link for the account owner. Never request their current password.</p></div><button onClick={() => void createPasswordResetLink()} className="border border-amber-300/30 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-300/10">Generate reset link</button></div>{resetLink && <textarea readOnly value={resetLink} rows={3} className="admin-input mt-3 resize-y" aria-label="Generated password recovery link" />}</section>
             </div>}
           </section>
+        </div>
+      )}
+
+      {messageUser && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 p-4" role="presentation" onMouseDown={event => { if (event.target === event.currentTarget) setMessageUser(null); }}>
+          <form onSubmit={sendAdminMessage} className="w-full max-w-lg space-y-4 border border-white/10 bg-[#111] p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-3"><div><p className="text-xs font-bold uppercase text-emerald-300">Support message</p><h2 className="mt-1 font-bold">To {messageUser.full_name || messageUser.username}</h2></div><button type="button" onClick={() => setMessageUser(null)} aria-label="Close message form" className="text-gray-400 hover:text-white"><X size={18} /></button></div>
+            <label className="block text-xs text-gray-400">Message<textarea required maxLength={4000} rows={5} value={adminMessageDraft} onChange={event => setAdminMessageDraft(event.target.value)} className="admin-input mt-1 resize-y" /></label>
+            <button disabled={saving || !adminMessageDraft.trim()} className="flex w-full items-center justify-center gap-2 bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50"><Send size={15} />{saving ? 'Sending…' : 'Send message'}</button>
+          </form>
         </div>
       )}
 

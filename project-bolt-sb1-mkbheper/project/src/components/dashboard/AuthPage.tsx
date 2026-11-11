@@ -142,7 +142,7 @@ export default function AuthPage({ initialMode = 'login', onBack, adminOnly = fa
 
         {/* Logo */}
         <div className="text-center mb-8">
-          <BrandLogo className="mb-4 inline-flex items-center gap-3" markClassName="h-12 w-12 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-xl shadow-amber-500/20" wordmarkClassName="text-white font-black text-2xl" fallbackClassName="text-white font-black text-2xl" />
+          <BrandLogo className="site-brand-image mx-auto mb-4 h-14 w-56" imageOnly showFallback={false} />
           <h1 className="text-2xl font-black text-white">
             {adminOnly ? 'Admin sign in' : mode === 'reset' ? 'Reset your password' : mode === 'login' ? 'Welcome back' : 'Create your account'}
           </h1>

@@ -23,6 +23,13 @@ interface Props {
   user: User;
 }
 
+type FeaturePermission = {
+  feature_key: string;
+  free_enabled: boolean;
+  premium_enabled: boolean;
+  settings: { allowed_plan_codes?: string[] } | null;
+};
+
 export default function Dashboard({ user }: Props) {
   const [tab, setTab] = useState<DashTab>('overview');
   const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
@@ -83,10 +90,16 @@ export default function Dashboard({ user }: Props) {
 
   useEffect(() => {
     let active = true;
-    supabase.from('feature_permissions').select('feature_key, free_enabled, premium_enabled').then(({ data }) => {
+    supabase.from('feature_permissions').select('feature_key, free_enabled, premium_enabled, settings').then(({ data }) => {
       if (!active) return;
       const premium = currentPlanCode !== 'free';
-      setFeatureAccess(Object.fromEntries((data ?? []).map(feature => [feature.feature_key, premium ? feature.premium_enabled : feature.free_enabled])));
+      const permissions = (data ?? []) as FeaturePermission[];
+      setFeatureAccess(Object.fromEntries(permissions.map(feature => {
+        const enabled = feature.feature_key === 'custom-referral-code'
+          ? premium && feature.premium_enabled && (!feature.settings?.allowed_plan_codes || feature.settings.allowed_plan_codes.includes(currentPlanCode))
+          : premium ? feature.premium_enabled : feature.free_enabled;
+        return [feature.feature_key, enabled];
+      })));
     });
     return () => { active = false; };
   }, [currentPlanCode]);
@@ -127,7 +140,7 @@ export default function Dashboard({ user }: Props) {
     return (
       <div className="min-h-screen bg-[#0a0a0a] flex items-center justify-center">
         <div className="flex flex-col items-center gap-4">
-          <BrandLogo className="animate-pulse" showWordmark={false} markClassName="h-14 w-14 overflow-hidden rounded-2xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center" fallbackClassName="text-white font-black text-2xl" />
+          <BrandLogo className="site-brand-image h-14 w-48" imageOnly showFallback={false} />
           <p className="text-gray-400 text-sm">Loading dashboard…</p>
         </div>
       </div>
@@ -192,6 +205,7 @@ export default function Dashboard({ user }: Props) {
                 tasks={tasks}
                 completions={completions}
                 withdrawals={withdrawals}
+                referralCount={referrals.length}
                 userId={user.id}
                 onNavigate={tabName => setTab(tabName)}
                 onBalanceUpdated={nextBalance => setBalance(nextBalance)}

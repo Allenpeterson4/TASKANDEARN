@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MessageCircle, Mail, Phone, ChevronDown, ChevronUp, Send, Loader2, CheckCircle } from 'lucide-react';
 import { openExternalChat } from '@/lib/externalChat';
+import { supabase } from '@/lib/supabase';
 
 const faqs = [
   { q: 'How long does withdrawal take?', a: 'Most withdrawals are processed within 2 hours. During peak periods it may take up to 24 hours.' },
@@ -29,6 +30,8 @@ export default function SupportPanel({ isPremium, prioritySupport }: { isPremium
   const [form, setForm] = useState({ subject: '', message: '' });
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [ticketId, setTicketId] = useState('');
+  const [error, setError] = useState('');
 
   const set = (k: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
@@ -37,8 +40,17 @@ export default function SupportPanel({ isPremium, prioritySupport }: { isPremium
   async function handleSend(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    await new Promise(r => setTimeout(r, 1200));
+    setError('');
+    const { data, error: submitError } = await supabase.rpc('submit_support_ticket', {
+      p_subject: form.subject.trim(),
+      p_body: form.message.trim(),
+    });
     setLoading(false);
+    if (submitError) {
+      setError(submitError.message);
+      return;
+    }
+    setTicketId(String(data));
     setSent(true);
     setForm({ subject: '', message: '' });
   }
@@ -83,8 +95,8 @@ export default function SupportPanel({ isPremium, prioritySupport }: { isPremium
             <div className="w-14 h-14 rounded-full bg-green-500/10 flex items-center justify-center mb-4">
               <CheckCircle size={28} className="text-green-400" />
             </div>
-            <p className="text-white font-bold text-lg mb-1">Message Sent!</p>
-            <p className="text-gray-400 text-sm mb-5">Our support team will get back to you within 24 hours.</p>
+            <p className="text-white font-bold text-lg mb-1">Support ticket submitted</p>
+            <p className="text-gray-400 text-sm mb-1">Ticket {ticketId.slice(0, 8).toUpperCase()} · Our team will reply within 24 hours.</p>
             <button
               onClick={() => setSent(false)}
               className="px-6 py-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-gray-300 text-sm font-semibold transition-colors"
@@ -94,6 +106,7 @@ export default function SupportPanel({ isPremium, prioritySupport }: { isPremium
           </div>
         ) : (
           <form onSubmit={handleSend} className="space-y-4">
+            {error && <p role="alert" className="border border-red-400/20 bg-red-400/5 px-3 py-2 text-xs text-red-300">{error}</p>}
             <div>
               <label className="block text-xs text-gray-400 mb-1.5 font-medium">Subject</label>
               <input

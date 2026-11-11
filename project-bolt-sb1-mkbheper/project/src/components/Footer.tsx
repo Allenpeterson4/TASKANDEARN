@@ -63,7 +63,7 @@ export default function Footer() {
         <div className="grid lg:grid-cols-5 gap-12 mb-12">
           {/* Brand col */}
           <div className="lg:col-span-1">
-            <BrandLogo className="mb-4 flex items-center gap-3" markClassName="h-10 w-10 overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center" wordmarkClassName="text-white font-black text-xl" fallbackClassName="text-white font-black text-xl" />
+            <BrandLogo className="site-brand-image mb-4 h-10 w-40" imageOnly showFallback={false} />
             <p className="text-gray-400 text-sm leading-relaxed mb-6">
               Nigeria's most trusted platform for earning real Naira through
               simple online hustles and referrals.

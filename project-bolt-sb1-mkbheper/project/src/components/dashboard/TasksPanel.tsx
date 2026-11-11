@@ -239,7 +239,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                       type="file"
                       accept="image/png,image/jpeg,image/webp"
                       onChange={event => setProofFiles(current => ({ ...current, [task.id]: event.target.files?.[0] }))}
-                      className="mt-1 block w-full text-xs text-gray-400 file:mr-3 file:rounded-md file:border-0 file:bg-white/10 file:px-3 file:py-2 file:text-xs file:text-white"
+                      className="mt-1 block w-full text-xs text-gray-900 file:mr-3 file:rounded-md file:border file:border-gray-300 file:bg-white file:px-3 file:py-2 file:text-xs file:text-gray-900"
                     />
                     {proofFiles[task.id] && <span className="mt-1 block text-amber-400">{proofFiles[task.id]?.name}</span>}
                   </label>

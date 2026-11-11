@@ -78,20 +78,20 @@
 
 :root {
   color-scheme: dark;
-  --page-background: #000000;
-  --surface-background: #111111;
-  --text-primary: #f9fafb;
-  --text-secondary: #9ca3af;
-  --border-subtle: rgba(255, 255, 255, 0.08);
+  --page-background: var(--theme-dark-background, #000000);
+  --surface-background: var(--theme-dark-surface, #111111);
+  --text-primary: var(--theme-dark-text, #f9fafb);
+  --text-secondary: var(--theme-dark-muted, #9ca3af);
+  --border-subtle: color-mix(in srgb, var(--theme-dark-border, #ffffff) 15%, transparent);
 }
 
 :root[data-theme='light'] {
   color-scheme: light;
-  --page-background: #f4f6f8;
-  --surface-background: #ffffff;
-  --text-primary: #17212b;
-  --text-secondary: #586574;
-  --border-subtle: rgba(24, 39, 56, 0.13);
+  --page-background: var(--theme-light-background, #f4f6f8);
+  --surface-background: var(--theme-light-surface, #ffffff);
+  --text-primary: var(--theme-light-text, #17212b);
+  --text-secondary: var(--theme-light-muted, #586574);
+  --border-subtle: color-mix(in srgb, var(--theme-light-border, #182738) 13%, transparent);
 }
 
 :root[data-theme='light'] body {
@@ -227,4 +227,158 @@
 :root[data-theme='light'] select::placeholder {
   color: #000000 !important;
   opacity: 0.65;
+}
+
+:root[data-theme='light'] .hustler-wallet-card {
+  background-color: #ffffff !important;
+  background-image: none !important;
+  border-color: rgba(180, 83, 9, 0.28) !important;
+  box-shadow: 0 18px 44px rgba(23, 33, 43, 0.08) !important;
+}
+
+:root:not([data-theme='light']) .hustler-wallet-card {
+  background-color: #120903 !important;
+  background-image: linear-gradient(115deg, color-mix(in srgb, var(--brand-accent, #f59e0b) 18%, #120903), #120903 58%, color-mix(in srgb, var(--brand-accent-secondary, #f97316) 20%, #120903)) !important;
+  border-color: color-mix(in srgb, var(--brand-accent-secondary, #f97316) 78%, transparent) !important;
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--brand-accent, #f59e0b) 38%, transparent), 0 0 18px color-mix(in srgb, var(--brand-accent-secondary, #f97316) 48%, transparent), 0 18px 42px rgba(0, 0, 0, 0.48) !important;
+}
+
+:root[data-theme='light'] .hustler-wallet-card .hustler-wallet-glow {
+  display: none;
+}
+
+:root[data-theme='light'] .hustler-wallet-card .hustler-wallet-title,
+:root[data-theme='light'] .hustler-wallet-card .hustler-wallet-logo [class~="text-amber-400"] {
+  color: #a64b00 !important;
+}
+
+:root[data-theme='light'] .hustler-wallet-card .hustler-wallet-logo {
+  opacity: 0.24 !important;
+}
+
+:root:not([data-theme='light']) .hustler-wallet-card .hustler-wallet-logo {
+  opacity: 1 !important;
+}
+
+.hustler-wallet-logo > div,
+.hustler-wallet-logo img,
+.site-brand-image,
+.site-brand-image img,
+.preloader-logo > div,
+.preloader-logo img {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+:root:not([data-theme='light']) body {
+  background-color: var(--theme-dark-background, #000000);
+  color: var(--theme-dark-text, #f9fafb);
+}
+
+:root:not([data-theme='light']) [class*="bg-[#0a0a0a]"],
+:root:not([data-theme='light']) [class*="bg-[#080808]"],
+:root:not([data-theme='light']) [class*="bg-[#0e0e0e]"],
+:root:not([data-theme='light']) [class*="bg-[#0d0d0d]"],
+:root:not([data-theme='light']) [class*="bg-[#0f0f0f]"] {
+  background-color: var(--theme-dark-background, #000000) !important;
+}
+
+:root:not([data-theme='light']) [class*="bg-[#111]"],
+:root:not([data-theme='light']) [class*="bg-[#161616]"],
+:root:not([data-theme='light']) [class*="bg-[#1a1a1a]"] {
+  background-color: var(--theme-dark-surface, #111111) !important;
+}
+
+:root:not([data-theme='light']) [class*="text-gray-"] {
+  color: var(--theme-dark-muted, #9ca3af) !important;
+}
+
+:root[data-theme='light'] body {
+  background-color: var(--theme-light-background, #f4f6f8) !important;
+  color: var(--theme-light-text, #17212b) !important;
+}
+
+:root[data-theme='light'] [class*="bg-[#0a0a0a]"],
+:root[data-theme='light'] [class*="bg-[#080808]"],
+:root[data-theme='light'] [class*="bg-[#0e0e0e]"],
+:root[data-theme='light'] [class*="bg-[#0d0d0d]"],
+:root[data-theme='light'] [class*="bg-[#0f0f0f]"] {
+  background-color: var(--theme-light-background, #f4f6f8) !important;
+}
+
+:root[data-theme='light'] [class*="bg-[#111]"],
+:root[data-theme='light'] [class*="bg-[#161616]"],
+:root[data-theme='light'] [class*="bg-[#1a1a1a]"] {
+  background-color: var(--theme-light-surface, #ffffff) !important;
+}
+
+:root[data-theme='light'] [class*="text-gray-"] {
+  color: var(--theme-light-muted, #586574) !important;
+}
+
+:root [class*="text-amber-"],
+:root [class*="text-orange-"] {
+  color: var(--brand-accent, #f59e0b) !important;
+}
+
+:root [class~="bg-amber-400"] {
+  background-color: var(--brand-accent, #f59e0b) !important;
+}
+
+:root [class~="bg-orange-400"] {
+  background-color: var(--brand-accent-secondary, #f97316) !important;
+}
+
+:root [class*="from-amber-"],
+:root [class*="from-orange-"] {
+  background-image: linear-gradient(135deg, var(--brand-accent, #f59e0b), var(--brand-accent-secondary, #f97316)) !important;
+}
+
+:root [class*="border-amber-"],
+:root [class*="border-orange-"] {
+  border-color: color-mix(in srgb, var(--brand-accent, #f59e0b) 35%, transparent) !important;
+}
+
+:root [class*="text-green-"],
+:root [class*="text-emerald-"] {
+  color: var(--brand-success, #22c55e) !important;
+}
+
+:root [class*="bg-green-400"],
+:root [class*="bg-emerald-400"] {
+  background-color: var(--brand-success, #22c55e) !important;
+}
+
+:root [class*="text-red-"] {
+  color: var(--brand-danger, #ef4444) !important;
+}
+
+:root [class*="bg-red-400"] {
+  background-color: var(--brand-danger, #ef4444) !important;
+}
+
+:root [class*="text-blue-"] {
+  color: var(--brand-info, #3b82f6) !important;
+}
+
+:root:not([data-theme='light']) [class~="text-white"] {
+  color: var(--theme-dark-text, #f9fafb) !important;
+}
+
+:root[data-theme='light'] [class~="text-white"] {
+  color: var(--theme-light-text, #17212b) !important;
+}
+
+:root:not([data-theme='light']) .admin-input {
+  background-color: var(--theme-dark-background, #080808) !important;
+  border-color: color-mix(in srgb, var(--theme-dark-border, #ffffff) 15%, transparent) !important;
+  color: var(--theme-dark-text, #f9fafb) !important;
+}
+
+:root[data-theme='light'] .admin-input {
+  background-color: var(--theme-light-surface, #ffffff) !important;
+  border-color: color-mix(in srgb, var(--theme-light-border, #182738) 18%, transparent) !important;
+  color: var(--theme-light-text, #17212b) !important;
 }

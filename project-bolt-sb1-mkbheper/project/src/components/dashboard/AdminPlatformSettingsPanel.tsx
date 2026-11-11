@@ -28,7 +28,8 @@ type Settings = {
   referral_timezone: string;
 };
 
-type Feature = { feature_key: string; free_enabled: boolean; premium_enabled: boolean };
+type Feature = { feature_key: string; free_enabled: boolean; premium_enabled: boolean; settings: { allowed_plan_codes?: string[] } };
+type PaidPlan = { plan_code: string; name: string };
 type LeaderboardReward = { rank: number; amount: number; enabled: boolean };
 const defaults: Settings = { referral_signup_reward: 200, referral_first_hustle_reward: 200, milestone_reward: 2000, hustler_withdrawals_enabled: true, referral_withdrawals_enabled: true, withdrawal_failure_message: 'Your account has not met the withdrawal requirements yet.', minimum_hustles: 0, require_all_hustles: false, minimum_hustle_level: 0, minimum_referrals: 0, minimum_checkin_streak: 0, minimum_online_minutes: 0, minimum_interactions: 0, measurement_days: 30, auto_review_mode: 'manual', hustler_payout_days: [5], hustler_window_start: '14:00', hustler_window_end: '18:00', hustler_timezone: 'Africa/Lagos', referral_payout_days: [5], referral_window_start: '14:00', referral_window_end: '18:00', referral_timezone: 'Africa/Lagos' };
 const hustleLevels = ['Baby Hustler', 'Nepo Hustler', 'Pako Hustler', 'Street Hustler', 'Oga Hustler', 'Odogwu Hustler', 'President'];
@@ -36,6 +37,7 @@ const hustleLevels = ['Baby Hustler', 'Nepo Hustler', 'Pako Hustler', 'Street Hu
 export default function AdminPlatformSettingsPanel() {
   const [settings, setSettings] = useState(defaults);
   const [features, setFeatures] = useState<Feature[]>([]);
+  const [paidPlans, setPaidPlans] = useState<PaidPlan[]>([]);
   const [leaderboardRewards, setLeaderboardRewards] = useState<LeaderboardReward[]>([]);
   const [leaderboardCategory, setLeaderboardCategory] = useState<'earnings' | 'hustles' | 'referrals'>('earnings');
   const [loading, setLoading] = useState(true);
@@ -47,17 +49,30 @@ export default function AdminPlatformSettingsPanel() {
       supabase.from('platform_settings').select('*').eq('singleton', true).maybeSingle(),
       supabase.from('feature_permissions').select('*').order('feature_key'),
       supabase.from('leaderboard_reward_settings').select('*').order('rank'),
-    ]).then(([settingsResult, featureResult, rewardsResult]) => {
+      supabase.from('subscription_plans').select('plan_code, name').eq('is_active', true).gt('price', 0).order('price'),
+    ]).then(([settingsResult, featureResult, rewardsResult, plansResult]) => {
       if (settingsResult.error || featureResult.error || rewardsResult.error) setMessage(settingsResult.error?.message ?? featureResult.error?.message ?? rewardsResult.error?.message ?? 'Could not load settings.');
       if (settingsResult.data) setSettings({ ...defaults, ...(settingsResult.data as Settings) });
       setFeatures((featureResult.data ?? []) as Feature[]);
       setLeaderboardRewards((rewardsResult.data ?? []) as LeaderboardReward[]);
+      setPaidPlans((plansResult.data ?? []) as PaidPlan[]);
       setLoading(false);
     });
   }, []);
 
   function updateFeature(index: number, key: 'free_enabled' | 'premium_enabled', checked: boolean) {
     setFeatures(current => current.map((feature, row) => row === index ? { ...feature, [key]: checked } : feature));
+  }
+
+  function updateReferralPlan(planCode: string, checked: boolean) {
+    setFeatures(current => current.map(feature => {
+      if (feature.feature_key !== 'custom-referral-code') return feature;
+      const currentCodes = feature.settings.allowed_plan_codes ?? paidPlans.map(plan => plan.plan_code);
+      const allowedPlanCodes = checked
+        ? [...new Set([...currentCodes, planCode])]
+        : currentCodes.filter(code => code !== planCode);
+      return { ...feature, settings: { ...feature.settings, allowed_plan_codes: allowedPlanCodes } };
+    }));
   }
 
   function updatePayoutDays(key: 'hustler_payout_days' | 'referral_payout_days', value: string) {
@@ -79,7 +94,7 @@ export default function AdminPlatformSettingsPanel() {
     const { data: user } = await supabase.auth.getUser();
     const [settingsResult, ...featureResults] = await Promise.all([
       supabase.from('platform_settings').update({ ...settings, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('singleton', true),
-      ...features.map(feature => supabase.from('feature_permissions').update({ free_enabled: feature.free_enabled, premium_enabled: feature.premium_enabled, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('feature_key', feature.feature_key)),
+      ...features.map(feature => supabase.from('feature_permissions').update({ free_enabled: feature.free_enabled, premium_enabled: feature.premium_enabled, settings: feature.settings, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('feature_key', feature.feature_key)),
       ...leaderboardRewards.map(reward => supabase.from('leaderboard_reward_settings').update({ amount: reward.amount, enabled: reward.enabled, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('rank', reward.rank)),
     ]);
     const reviewResult = settingsResult.error ? null : await supabase.rpc('admin_set_auto_review_mode', { p_mode: settings.auto_review_mode });
@@ -100,6 +115,8 @@ export default function AdminPlatformSettingsPanel() {
   const numberField = (key: 'referral_signup_reward' | 'referral_first_hustle_reward' | 'milestone_reward' | 'minimum_hustles' | 'minimum_hustle_level' | 'minimum_referrals' | 'minimum_checkin_streak' | 'minimum_online_minutes' | 'minimum_interactions' | 'measurement_days', label: string, min = 0, max?: number) => (
     <label key={key} className="block text-xs text-gray-400">{label}<input type="number" min={min} max={max} step="1" value={settings[key]} onChange={event => setSettings(current => ({ ...current, [key]: Number(event.target.value) }))} className="admin-input mt-1" /></label>
   );
+  const customReferralFeature = features.find(feature => feature.feature_key === 'custom-referral-code');
+  const allowedReferralPlanCodes = customReferralFeature?.settings.allowed_plan_codes ?? paidPlans.map(plan => plan.plan_code);
 
   return (
     <form onSubmit={save} className="space-y-8">
@@ -143,8 +160,18 @@ export default function AdminPlatformSettingsPanel() {
           <div className="flex flex-wrap items-end gap-3"><label className="text-xs text-gray-400">Reward category<select value={leaderboardCategory} onChange={event => setLeaderboardCategory(event.target.value as typeof leaderboardCategory)} className="admin-input mt-1"><option value="earnings">Earnings</option><option value="hustles">Completed hustles</option><option value="referrals">Referrals</option></select></label><button type="button" disabled={saving} onClick={() => void issueLeaderboardRewards()} className="bg-orange-400 px-4 py-2.5 text-xs font-bold text-black disabled:opacity-50">{saving ? 'Issuing…' : 'Issue this month’s rewards'}</button><p className="text-xs text-gray-500">Each user can receive one reward per category each month.</p></div>
         </section>
         <section className="space-y-3 border-t border-white/10 pt-5">
+          <h2 className="font-bold">Custom referral codes</h2>
+          {customReferralFeature ? <>
+            <label className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={customReferralFeature.premium_enabled} onChange={event => updateFeature(features.findIndex(feature => feature.feature_key === 'custom-referral-code'), 'premium_enabled', event.target.checked)} className="accent-orange-400" />Enable custom codes for selected paid plans</label>
+            <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+              {paidPlans.map(plan => <label key={plan.plan_code} className="flex items-center gap-2 border border-white/8 px-3 py-2 text-sm text-gray-300"><input type="checkbox" checked={allowedReferralPlanCodes.includes(plan.plan_code)} disabled={!customReferralFeature.premium_enabled} onChange={event => updateReferralPlan(plan.plan_code, event.target.checked)} className="accent-orange-400" />{plan.name}</label>)}
+              {paidPlans.length === 0 && <p className="text-xs text-gray-500">Create and activate a paid plan to configure access.</p>}
+            </div>
+          </> : <p className="text-xs text-gray-500">The custom referral code feature is not configured.</p>}
+        </section>
+        <section className="space-y-3 border-t border-white/10 pt-5">
           <h2 className="font-bold">Feature permission matrix</h2>
-          <div className="overflow-x-auto border-y border-white/8"><table className="w-full min-w-[480px] text-left text-sm"><thead className="text-xs text-gray-500"><tr><th className="py-3">Feature</th><th className="py-3">H. Free</th><th className="py-3">Premium</th></tr></thead><tbody className="divide-y divide-white/8">{features.map((feature, index) => <tr key={feature.feature_key}><td className="py-3 capitalize">{feature.feature_key.replace(/-/g, ' ')}</td><td className="py-3"><input aria-label={`${feature.feature_key} for free`} type="checkbox" checked={feature.free_enabled} onChange={event => updateFeature(index, 'free_enabled', event.target.checked)} className="accent-orange-400" /></td><td className="py-3"><input aria-label={`${feature.feature_key} for premium`} type="checkbox" checked={feature.premium_enabled} onChange={event => updateFeature(index, 'premium_enabled', event.target.checked)} className="accent-orange-400" /></td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto border-y border-white/8"><table className="w-full min-w-[480px] text-left text-sm"><thead className="text-xs text-gray-500"><tr><th className="py-3">Feature</th><th className="py-3">H. Free</th><th className="py-3">Premium</th></tr></thead><tbody className="divide-y divide-white/8">{features.filter(feature => feature.feature_key !== 'custom-referral-code').map(feature => <tr key={feature.feature_key}><td className="py-3 capitalize">{feature.feature_key.replace(/-/g, ' ')}</td><td className="py-3"><input aria-label={`${feature.feature_key} for free`} type="checkbox" checked={feature.free_enabled} onChange={event => updateFeature(features.indexOf(feature), 'free_enabled', event.target.checked)} className="accent-orange-400" /></td><td className="py-3"><input aria-label={`${feature.feature_key} for premium`} type="checkbox" checked={feature.premium_enabled} onChange={event => updateFeature(features.indexOf(feature), 'premium_enabled', event.target.checked)} className="accent-orange-400" /></td></tr>)}</tbody></table></div>
         </section>
         <button disabled={saving} className="flex items-center gap-2 bg-orange-400 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={15} /> : <Save size={15} />}Save controls</button>
       </>}

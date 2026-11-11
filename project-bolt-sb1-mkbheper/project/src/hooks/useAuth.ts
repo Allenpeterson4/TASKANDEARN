@@ -7,18 +7,28 @@ export function useAuth() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    let active = true;
+
     if (!isSupabaseConfigured) {
       setLoading(false);
       return;
     }
 
+    const loadingTimeout = window.setTimeout(() => {
+      if (active) setLoading(false);
+    }, 8000);
+
     supabase.auth.getSession()
-      .then(({ data }) => setUser(data.session?.user ?? null))
-      .catch(() => setUser(null))
-      .finally(() => setLoading(false));
+      .then(({ data }) => { if (active) setUser(data.session?.user ?? null); })
+      .catch(() => { if (active) setUser(null); })
+      .finally(() => {
+        window.clearTimeout(loadingTimeout);
+        if (active) setLoading(false);
+      });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       setUser(session?.user ?? null);
+      setLoading(false);
       if (event === 'SIGNED_IN' && session?.user) {
         window.setTimeout(() => {
           void supabase.functions.invoke('capture-login');
@@ -26,7 +36,11 @@ export function useAuth() {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      active = false;
+      window.clearTimeout(loadingTimeout);
+      subscription.unsubscribe();
+    };
   }, []);
 
   return { user, loading };

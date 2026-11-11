@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Zap, Clock, ArrowUpRight, ChevronRight, X, BarChart3 } from 'lucide-react';
+import BrandLogo from '@/components/BrandLogo';
 import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/supabase';
 import DailyCheckinCard from './DailyCheckinCard';
+import WithdrawalProgressCard from './WithdrawalProgressCard';
 
 interface Props {
   profile: Profile | null;
@@ -9,31 +11,14 @@ interface Props {
   tasks: Task[];
   completions: TaskCompletion[];
   withdrawals: Withdrawal[];
+  referralCount: number;
   userId: string;
   onNavigate: (tab: 'tasks' | 'referral' | 'wallet' | 'plans') => void;
   onBalanceUpdated: (balance: Balance) => void;
 }
 
-export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, userId, onNavigate, onBalanceUpdated }: Props) {
-  const quotes = [
-    'Your consistency is building real momentum.',
-    'Small hustles today can create a stronger tomorrow.',
-    'You are closer to your next milestone than you think.',
-    'Every verified hustle is a step toward your goals.',
-    'Your effort is adding up. Keep the streak alive.',
-    'There is more earning potential waiting in your hustle list.',
-    'Progress looks good on you. Keep moving forward.',
-    'Your next win could be one completed hustle away.',
-    'Smart effort compounds. Make today count.',
-    'You showed up. Now turn that energy into earnings.',
-  ];
-  const [quoteIndex, setQuoteIndex] = useState(0);
+export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, referralCount, userId, onNavigate, onBalanceUpdated }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
-
-  useEffect(() => {
-    const timer = window.setInterval(() => setQuoteIndex(current => (current + 1) % quotes.length), 5000);
-    return () => window.clearInterval(timer);
-  }, [quotes.length]);
 
   const done = completions.filter(c => c.status === 'approved').length;
   const pending = completions.filter(c => c.status === 'pending').length;
@@ -84,38 +69,59 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
         </div>
       </section>
 
-      <div className="flex min-h-10 items-center border-l-2 border-amber-400/70 bg-white/[0.025] px-4 py-2">
-        <p className="text-xs leading-relaxed text-gray-400">{quotes[quoteIndex]}</p>
-      </div>
-
-      <section className="relative isolate overflow-hidden border border-amber-400/20 bg-gradient-to-br from-amber-400/10 via-transparent to-orange-500/5 p-6 sm:p-8" aria-label="Hustler wallet balance">
-        <span aria-hidden="true" className="pointer-events-none absolute -right-2 top-1/2 -translate-y-1/2 select-none text-[170px] font-black leading-none text-white/[0.035] sm:text-[210px]">M</span>
-        <div className="relative flex flex-wrap items-end justify-between gap-5">
-          <div>
-            <p className="text-xs font-bold uppercase text-amber-300">Hustler wallet</p>
-            <p className="mt-2 text-4xl font-black leading-none text-white sm:text-5xl">₦{availableBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
-            <p className="mt-3 text-xs text-gray-400">Hustles ₦{(balance?.reward_balance ?? 0).toLocaleString('en-NG')} <span className="mx-1 text-gray-600">·</span> Referrals ₦{(balance?.referral_balance ?? 0).toLocaleString('en-NG')} <span className="mx-1 text-gray-600">·</span> Lifetime ₦{(balance?.total_earned ?? 0).toLocaleString('en-NG')}</p>
+      <section className="hustler-wallet-card relative isolate overflow-hidden rounded-2xl border border-amber-300/60 bg-gradient-to-br from-[#21190c] via-[#17140f] to-[#10100f] p-4 shadow-[0_0_24px_-8px_rgba(249,115,22,0.7)] sm:p-6" aria-label="Hustler wallet balance">
+        <BrandLogo
+          className="hustler-wallet-logo pointer-events-none absolute right-3 top-2 z-0 flex h-16 w-16 items-center justify-center opacity-100 sm:right-6 sm:top-3 sm:h-28 sm:w-28"
+          markClassName="h-full w-full"
+          showWordmark={false}
+          showFallback={false}
+        />
+        <div className="relative z-10 grid min-h-36 grid-cols-[minmax(0,1fr)_auto] grid-rows-[1fr_auto] items-end gap-x-2 gap-y-3 sm:min-h-48 sm:grid-cols-[minmax(0,1fr)_150px] sm:gap-x-5">
+          <div className="col-start-1 row-span-2 min-w-0 pb-1">
+            <p className="hustler-wallet-title text-xs font-bold uppercase tracking-[0.12em] text-amber-300">Hustler wallet</p>
+            <p className="mt-2 text-2xl font-black leading-none text-white sm:text-5xl">₦{availableBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
+            <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-gray-300/80 sm:mt-4 sm:text-xs">
+              <span>Hustles <span className="font-semibold text-white/90">₦{(balance?.reward_balance ?? 0).toLocaleString('en-NG')}</span></span>
+              <span>Referrals <span className="font-semibold text-white/90">₦{(balance?.referral_balance ?? 0).toLocaleString('en-NG')}</span></span>
+              <span>Lifetime <span className="font-semibold text-white/90">₦{(balance?.total_earned ?? 0).toLocaleString('en-NG')}</span></span>
+            </p>
           </div>
-          <button onClick={() => onNavigate('wallet')} className="border border-amber-300/40 px-4 py-2.5 text-sm font-bold text-amber-200 hover:bg-amber-300/10">Open wallet</button>
+          <button onClick={() => onNavigate('wallet')} className="col-start-2 row-start-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/40 bg-amber-400 px-3 py-2.5 text-xs font-bold text-[#21190c] transition-colors hover:bg-amber-300 sm:px-5 sm:py-3 sm:text-sm">
+            Open wallet <ArrowUpRight size={16} />
+          </button>
         </div>
       </section>
 
-      {availableTaskCount > 0 && !reminderDismissed && (
-        <div className="flex items-center justify-between gap-4 border border-orange-400/20 bg-orange-400/5 px-4 py-3">
-          <div className="min-w-0">
-            <p className="text-sm font-bold text-orange-200">Your daily hustle reminder</p>
-            <p className="mt-0.5 text-xs text-gray-400">{availableTaskCount} available hustle{availableTaskCount === 1 ? '' : 's'} are waiting today.</p>
-          </div>
-          <div className="flex shrink-0 items-center gap-2">
-            <button onClick={() => onNavigate('tasks')} className="border border-orange-300/30 px-3 py-2 text-xs font-semibold text-orange-200 hover:bg-orange-300/10">View hustles</button>
-            <button onClick={dismissReminder} aria-label="Dismiss today's hustle reminder" className="p-2 text-gray-400 hover:text-white"><X size={15} /></button>
-          </div>
-        </div>
-      )}
-
+      <WithdrawalProgressCard userId={userId} approvedHustles={done} referralCount={referralCount} tasks={tasks} completions={completions} />
       <DailyCheckinCard userId={userId} firstName={firstName} badge={hustleBadge} onBalanceUpdated={onBalanceUpdated} />
 
+      {/* Available hustles preview */}
+      <div className="overflow-hidden rounded-xl border border-white/8 bg-[#111]">
+        <div className="flex items-center justify-between border-b border-white/8 px-4 py-3">
+          <h3 className="text-sm font-bold text-white">Available Hustles</h3>
+          <button onClick={() => onNavigate('tasks')} className="flex items-center gap-1 text-xs font-semibold text-amber-400 hover:text-amber-300">View all <ChevronRight size={14} /></button>
+        </div>
+        <div className="divide-y divide-white/8">
+          {recentTasks.slice(0, 3).map(task => (
+            <div key={task.id} className="flex min-w-0 items-center gap-3 px-4 py-3">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-sky-400/10"><Zap size={16} className="text-sky-300" /></div>
+              <div className="min-w-0 flex-1"><p className="truncate text-xs font-bold text-white">{task.title}</p><p className="truncate text-[10px] text-gray-500">{task.category} · {task.difficulty}</p></div>
+              <span className="shrink-0 text-xs font-bold text-emerald-400">₦{task.reward.toLocaleString('en-NG')}</span>
+              <button onClick={() => onNavigate('tasks')} className="shrink-0 rounded-lg bg-amber-400 px-3 py-2 text-[10px] font-bold text-black">Do Hustle <ArrowUpRight size={12} className="ml-1 inline" /></button>
+            </div>
+          ))}
+          {recentTasks.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-500">No hustles are available right now.</p>}
+        </div>
+      </div>
+
       <PerformanceChart completions={completions} period={chartPeriod} onPeriodChange={setChartPeriod} />
+
+      {availableTaskCount > 0 && !reminderDismissed && (
+        <div className="flex items-center justify-between gap-4 border border-orange-400/20 bg-orange-400/5 px-4 py-3">
+          <div className="min-w-0"><p className="text-sm font-bold text-orange-200">Your daily hustle reminder</p><p className="mt-0.5 text-xs text-gray-400">{availableTaskCount} available hustle{availableTaskCount === 1 ? '' : 's'} are waiting today.</p></div>
+          <button onClick={dismissReminder} aria-label="Dismiss today's hustle reminder" className="shrink-0 p-2 text-gray-400 hover:text-white"><X size={15} /></button>
+        </div>
+      )}
 
       {/* Quick stats */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">

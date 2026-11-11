@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Activity, CircleDollarSign, Flag, Megaphone, Users, WalletCards } from 'lucide-react';
+import { Activity, CircleDollarSign, Flag, Megaphone, RefreshCw, Users, WalletCards } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
+import AdminStorageCleanupPanel from './AdminStorageCleanupPanel';
 
 type Metrics = {
   pending_deposits: number;
@@ -18,19 +19,28 @@ const emptyMetrics: Metrics = { pending_deposits: 0, approved_deposits: 0, activ
 export default function AdminMetricsPanel() {
   const [metrics, setMetrics] = useState(emptyMetrics);
   const [error, setError] = useState('');
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     let active = true;
     async function load() {
+      setRefreshing(true);
       const { data, error: resultError } = await supabase.rpc('admin_dashboard_metrics');
       if (!active) return;
       if (resultError) setError(resultError.message);
-      else setMetrics({ ...emptyMetrics, ...(data as Partial<Metrics>) });
+      else {
+        setMetrics({ ...emptyMetrics, ...(data as Partial<Metrics>) });
+        setError('');
+        setLastUpdated(new Date());
+      }
+      setRefreshing(false);
     }
     void load();
-    const timer = window.setInterval(() => { void load(); }, 30000);
+    const timer = window.setInterval(() => { void load(); }, 15000);
     return () => { active = false; window.clearInterval(timer); };
-  }, []);
+  }, [refreshKey]);
 
   const usedGb = metrics.storage_bytes / (1024 ** 3);
   const storageWarning = usedGb >= 9.6;
@@ -47,6 +57,12 @@ export default function AdminMetricsPanel() {
   return (
     <section className="mb-7 space-y-3" aria-label="Live platform metrics">
       {error && <p role="status" className="text-xs text-amber-200">Live metrics unavailable: {error}</p>}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-xs text-gray-500">{lastUpdated ? `Updated ${lastUpdated.toLocaleTimeString()}` : 'Waiting for first metrics update'}</p>
+        <button type="button" onClick={() => setRefreshKey(current => current + 1)} disabled={refreshing} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-xs font-semibold text-gray-300 hover:bg-white/5 disabled:opacity-50">
+          <RefreshCw size={13} className={refreshing ? 'animate-spin' : ''} />{refreshing ? 'Refreshing' : 'Refresh now'}
+        </button>
+      </div>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-7">
         {cards.map(card => {
           const Icon = card.icon;
@@ -57,6 +73,7 @@ export default function AdminMetricsPanel() {
         <span className="text-gray-400">Storage utilization</span>
         <span className="font-semibold text-white">{usedGb.toFixed(2)} GB / 12 GB <span className={storageWarning ? 'text-amber-300' : 'text-emerald-300'}>({storageWarning ? 'Warning' : 'Healthy'})</span></span>
       </div>
+      <AdminStorageCleanupPanel onCleaned={() => setRefreshKey(current => current + 1)} />
     </section>
   );
 }

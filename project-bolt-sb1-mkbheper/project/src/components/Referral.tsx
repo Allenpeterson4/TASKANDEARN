@@ -1,4 +1,19 @@
 import { Users, Copy, TrendingUp, Gift, ArrowRight, CheckCircle } from 'lucide-react';
+import { useSiteContent } from '@/hooks/useSiteContent';
+
+const referralStepKeys = [
+  'referrals.how_it_works.1',
+  'referrals.how_it_works.2',
+  'referrals.how_it_works.3',
+  'referrals.how_it_works.4',
+];
+
+const defaultSteps = [
+  'Copy and share your unique referral link via WhatsApp, social media, or anywhere.',
+  'Your friend signs up using your link and creates a verified account.',
+  'When they complete their first hustle, you receive the configured referral bonus.',
+  'You continue earning referral rewards as your invite completes hustles.',
+];
 
 const tiers = [
   {
@@ -41,14 +56,10 @@ const tiers = [
   },
 ];
 
-const steps = [
-  'Share your unique referral link via WhatsApp, Instagram, or any channel',
-  'Your friend signs up and completes their first verified task',
-  'Both you and your friend receive an instant bonus reward',
-  'Earn passive income every time your referral completes tasks',
-];
-
 export default function Referral() {
+  const referralCopy = useSiteContent(referralStepKeys);
+  const steps = defaultSteps.map((fallback, index) => referralCopy[referralStepKeys[index]] || fallback);
+
   return (
     <section id="referral" className="relative py-28 bg-[#0d0d0d] overflow-hidden">
       <div className="absolute top-0 right-1/3 w-[600px] h-[400px] bg-amber-500/4 rounded-full blur-[120px] pointer-events-none" />

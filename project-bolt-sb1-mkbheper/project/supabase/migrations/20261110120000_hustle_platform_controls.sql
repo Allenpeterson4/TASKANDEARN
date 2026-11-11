@@ -118,7 +118,8 @@ GRANT SELECT ON public.daily_checkins TO authenticated;
 DROP POLICY IF EXISTS users_read_own_checkins ON public.daily_checkins;
 CREATE POLICY users_read_own_checkins ON public.daily_checkins FOR SELECT TO authenticated USING (auth.uid() = user_id);
 
-CREATE OR REPLACE FUNCTION public.claim_daily_checkin()
+DROP FUNCTION IF EXISTS public.claim_daily_checkin();
+CREATE FUNCTION public.claim_daily_checkin()
 RETURNS public.daily_checkins
 LANGUAGE plpgsql
 SECURITY DEFINER
@@ -325,7 +326,7 @@ GRANT EXECUTE ON FUNCTION public.get_hustle_score(uuid) TO authenticated;
 REVOKE ALL ON FUNCTION public.get_hustle_score(uuid) FROM PUBLIC, anon;
 
 CREATE OR REPLACE FUNCTION public.get_leaderboard(p_category text DEFAULT 'earnings')
-RETURNS TABLE (position integer, user_id uuid, display_name text, avatar_url text, score numeric)
+RETURNS TABLE ("position" integer, user_id uuid, display_name text, avatar_url text, score numeric)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER
@@ -916,7 +917,7 @@ BEGIN
   WHERE user_id = auth.uid() AND status = 'pending' AND wallet_type = p_wallet_type;
   SELECT COALESCE(sum(wallet_contribution), 0) INTO v_reserved FROM public.user_subscriptions
   WHERE user_id = auth.uid() AND status = 'pending' AND expires_at > now();
-  IF v_wallet_amount - v_pending - CASE WHEN p_wallet_type = 'hustler' THEN v_reserved ELSE 0 END < p_amount THEN
+  IF v_wallet_amount - v_pending - (CASE WHEN p_wallet_type = 'hustler' THEN v_reserved ELSE 0 END) < p_amount THEN
     RAISE EXCEPTION 'Insufficient available wallet balance';
   END IF;
 
@@ -1644,7 +1645,7 @@ CREATE TRIGGER skip_disabled_referral BEFORE INSERT ON public.referrals
 FOR EACH ROW EXECUTE FUNCTION public.skip_disabled_referral();
 
 CREATE OR REPLACE FUNCTION public.get_leaderboard(p_category text DEFAULT 'earnings')
-RETURNS TABLE (position integer, user_id uuid, display_name text, avatar_url text, score numeric)
+RETURNS TABLE ("position" integer, user_id uuid, display_name text, avatar_url text, score numeric)
 LANGUAGE plpgsql
 STABLE
 SECURITY DEFINER

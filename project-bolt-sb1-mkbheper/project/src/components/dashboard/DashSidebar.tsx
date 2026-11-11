@@ -89,7 +89,7 @@ export default function DashSidebar({
         {/* Logo + close */}
         <div className="flex items-center justify-between px-5 py-5 border-b border-white/6">
           <div className="flex items-center gap-3">
-            <BrandLogo className="flex items-center gap-3" markClassName="h-9 w-9 overflow-hidden rounded-xl bg-gradient-to-br from-amber-400 to-orange-600 flex items-center justify-center shadow-lg shadow-amber-500/20" wordmarkClassName="text-white font-black text-lg" fallbackClassName="text-white font-black text-base" />
+            <BrandLogo className="site-brand-image h-9 w-36" imageOnly showFallback={false} />
           </div>
           <button
             onClick={() => setSideOpen(false)}

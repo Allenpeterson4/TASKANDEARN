@@ -1,6 +1,7 @@
 import { ArrowRight, ChevronDown, Star, Users, Zap, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSiteContent } from '@/hooks/useSiteContent';
+import { supabase } from '@/lib/supabase';
 
 const stats = [
   { value: '50K+', label: 'Active Earners' },
@@ -12,6 +13,10 @@ const stats = [
 export default function Hero() {
   const content = useSiteContent(['home.hero.title', 'home.hero.description', 'home.hero.image']);
   const titleLines = (content['home.hero.title'] || 'Turn Every\nHustle into\nReal Naira').split('\n');
+  const heroImagePath = content['home.hero.image'];
+  const heroImageUrl = heroImagePath && !/^https?:\/\//i.test(heroImagePath)
+    ? supabase.storage.from('site-media').getPublicUrl(heroImagePath).data.publicUrl
+    : null;
 
   return (
     <section
@@ -95,13 +100,11 @@ export default function Hero() {
 
           {/* Right: image + floating cards */}
           <div className="relative lg:pl-8">
-            <div className="relative rounded-3xl overflow-hidden shadow-2xl shadow-black/50">
-              <img
-                src={content['home.hero.image'] || 'https://images.pexels.com/photos/5702321/pexels-photo-5702321.jpeg?auto=compress&cs=tinysrgb&h=650&w=940'}
-                alt="Earning potential with MrHustler"
-                className="w-full h-[480px] object-cover"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/60 via-transparent to-transparent" />
+            <div className="relative min-h-[480px] overflow-hidden rounded-3xl bg-[#161616] shadow-2xl shadow-black/50">
+              {heroImageUrl && <>
+                <img src={heroImageUrl} alt="Earning potential with MrHustler" loading="eager" fetchPriority="high" className="h-[480px] w-full object-cover" />
+                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/60 via-transparent to-transparent" />
+              </>}
             </div>
 
             {/* Floating cards */}
