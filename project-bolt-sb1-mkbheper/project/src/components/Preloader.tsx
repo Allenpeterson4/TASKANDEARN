@@ -31,8 +31,9 @@ export default function Preloader({ ready, onFinish }: PreloaderProps) {
       <BrandLogo
         variant="preloader"
         showWordmark={false}
-        showFallback={false}
+        showFallback
         imageOnly
+        fallbackClassName="flex h-full w-full items-center justify-center rounded-full bg-amber-400 text-5xl font-black text-black"
         className="preloader-logo h-32 w-32 animate-[spin_2.8s_linear_infinite] motion-reduce:animate-none"
         markClassName="h-full w-full"
       />

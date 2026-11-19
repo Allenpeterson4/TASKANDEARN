@@ -10,7 +10,6 @@ import {
   Menu,
   Crown,
   WalletCards,
-  History,
   Trophy,
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
@@ -25,7 +24,6 @@ export type DashTab =
   | 'profile'
   | 'plans'
   | 'payment'
-  | 'history'
   | 'support';
 
 interface Props {
@@ -45,7 +43,6 @@ interface Props {
 const navItems: { id: DashTab; icon: typeof LayoutDashboard; label: string }[] = [
   { id: 'overview',   icon: LayoutDashboard, label: 'Home' },
   { id: 'tasks',      icon: ClipboardList,   label: 'Hustles' },
-  { id: 'history',    icon: History,         label: 'Hustle history' },
   { id: 'referral',   icon: Users,           label: 'Referrals' },
   { id: 'wallet',     icon: WalletCards,     label: 'Wallet' },
   { id: 'leaderboard', icon: Trophy,         label: 'Leaderboard' },
@@ -129,7 +126,7 @@ export default function DashSidebar({
                 <li key={item.id}>
                   <button
                     onClick={() => { onChange(item.id); setSideOpen(false); }}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${item.id === 'history' ? 'pl-9' : ''} ${
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 ${
                       isActive
                         ? 'bg-amber-400/10 text-amber-400 border border-amber-400/15'
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
@@ -182,7 +179,6 @@ export function DashTopbar({
     profile:    'My Profile',
     plans:      'Plans & Membership',
     payment:    'Payment Selection',
-    history:    'Hustle history',
     support:    'Help & Support',
   };
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import type { User } from '@supabase/supabase-js';
+import { ClipboardList, History } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import type { Profile, Balance, Task, TaskCompletion, Referral, Withdrawal } from '@/lib/supabase';
 import DashSidebar, { DashTopbar, type DashTab } from './DashSidebar';
@@ -32,6 +33,7 @@ type FeaturePermission = {
 
 export default function Dashboard({ user }: Props) {
   const [tab, setTab] = useState<DashTab>('overview');
+  const [hustleView, setHustleView] = useState<'available' | 'history'>('available');
   const [selectedPlanCode, setSelectedPlanCode] = useState<string | null>(null);
   const [sideOpen, setSideOpen] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -212,19 +214,46 @@ export default function Dashboard({ user }: Props) {
               />
             )}
             {tab === 'tasks' && (
-              <TasksPanel
-                tasks={tasks}
-                completions={completions}
-                userId={user.id}
-                currentPlanCode={currentPlanCode}
-                availablePlanCodes={availablePlanCodes}
-                allowCampaigns={featureAccess.campaigns !== false}
-                onUpgrade={() => setTab('plans')}
-                onCompletionAdded={(c) => setCompletions(prev => [...prev, c])}
-                onBalanceUpdated={(nextBalance) => setBalance(current => current ? { ...current, ...nextBalance } : current)}
-              />
+              <>
+                <div role="tablist" aria-label="Hustle views" className="mb-5 inline-flex rounded-xl bg-[#111] p-1">
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={hustleView === 'available'}
+                    aria-controls="hustles-view-panel"
+                    onClick={() => setHustleView('available')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${hustleView === 'available' ? 'bg-amber-400 text-black' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    <ClipboardList size={16} /> Hustles
+                  </button>
+                  <button
+                    type="button"
+                    role="tab"
+                    aria-selected={hustleView === 'history'}
+                    aria-controls="hustles-view-panel"
+                    onClick={() => setHustleView('history')}
+                    className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-semibold transition-colors ${hustleView === 'history' ? 'bg-amber-400 text-black' : 'text-gray-400 hover:text-white'}`}
+                  >
+                    <History size={16} /> Hustle history
+                  </button>
+                </div>
+                <div role="tabpanel" id="hustles-view-panel">
+                  {hustleView === 'available' ? (
+                    <TasksPanel
+                      tasks={tasks}
+                      completions={completions}
+                      userId={user.id}
+                      currentPlanCode={currentPlanCode}
+                      availablePlanCodes={availablePlanCodes}
+                      allowCampaigns={featureAccess.campaigns !== false}
+                      onUpgrade={() => setTab('plans')}
+                      onCompletionAdded={c => setCompletions(previous => [...previous, c])}
+                      onBalanceUpdated={nextBalance => setBalance(current => current ? { ...current, ...nextBalance } : current)}
+                    />
+                  ) : <TaskHistoryPanel tasks={tasks} completions={completions} />}
+                </div>
+              </>
             )}
-            {tab === 'history' && <TaskHistoryPanel tasks={tasks} completions={completions} />}
             {tab === 'referral' && (
               <ReferralPanel
                 profile={profile}

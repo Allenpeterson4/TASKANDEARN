@@ -154,7 +154,7 @@ Deno.serve(async request => {
       enabled: settings.enabled === true,
       host: settings.host.trim(),
       port: Number(settings.port),
-      secure: settings.secure === true,
+      secure: settings.secure === true || Number(settings.port) === 465,
       username: typeof settings.username === 'string' ? settings.username.trim() : '',
       from_email: settings.from_email.trim(),
       from_name: typeof settings.from_name === 'string' ? settings.from_name.trim().slice(0, 120) : 'MrHustler',
@@ -180,7 +180,7 @@ Deno.serve(async request => {
   const transporter = nodemailer.createTransport({
     host: settings.host,
     port: settings.port,
-    secure: settings.secure,
+    secure: settings.secure || settings.port === 465,
     auth: settings.username ? { user: settings.username, pass: password } : undefined,
   });
 
@@ -196,7 +196,7 @@ Deno.serve(async request => {
       return Response.json({ sent: true, recipient: adminEmail }, { headers: corsHeaders });
     } catch (error) {
       console.error('SMTP test failed:', safeError(error));
-      return Response.json({ error: 'SMTP test failed. Check the server logs and SMTP settings.' }, { status: 502, headers: corsHeaders });
+      return Response.json({ error: `SMTP test failed: ${safeError(error)}` }, { status: 502, headers: corsHeaders });
     }
   }
 

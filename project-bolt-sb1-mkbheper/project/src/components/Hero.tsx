@@ -9,14 +9,17 @@ const stats = [
   { value: '99.8%', label: 'Uptime' },
   { value: '4.9★', label: 'User Rating' },
 ];
+const fallbackHeroImageUrl = 'https://images.unsplash.com/photo-1516321318423-f06f85e504b3?auto=format&fit=crop&w=1400&q=85';
 
 export default function Hero() {
   const content = useSiteContent(['home.hero.title', 'home.hero.description', 'home.hero.image']);
   const titleLines = (content['home.hero.title'] || 'Turn Every\nHustle into\nReal Naira').split('\n');
   const heroImagePath = content['home.hero.image'];
-  const heroImageUrl = heroImagePath && !/^https?:\/\//i.test(heroImagePath)
-    ? supabase.storage.from('site-media').getPublicUrl(heroImagePath).data.publicUrl
-    : null;
+  const heroImageUrl = heroImagePath
+    ? /^https?:\/\//i.test(heroImagePath)
+      ? heroImagePath
+      : supabase.storage.from('site-media').getPublicUrl(heroImagePath).data.publicUrl
+    : fallbackHeroImageUrl;
 
   return (
     <section
@@ -101,10 +104,15 @@ export default function Hero() {
           {/* Right: image + floating cards */}
           <div className="relative lg:pl-8">
             <div className="relative min-h-[480px] overflow-hidden rounded-3xl bg-[#161616] shadow-2xl shadow-black/50">
-              {heroImageUrl && <>
-                <img src={heroImageUrl} alt="Earning potential with MrHustler" loading="eager" fetchPriority="high" className="h-[480px] w-full object-cover" />
-                <div className="absolute inset-0 bg-gradient-to-t from-[#0a0a0a]/60 via-transparent to-transparent" />
-              </>}
+              <img src={heroImageUrl} alt="A person working on a laptop with MrHustler" loading="eager" fetchPriority="high" className="h-[480px] w-full object-cover" />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent" />
+              <div className="absolute bottom-6 left-6 flex items-center gap-3">
+                <span className="flex h-12 w-12 items-center justify-center rounded-xl bg-amber-400 text-2xl font-black text-black">M</span>
+                <div>
+                  <p className="text-lg font-black text-white">MrHustler</p>
+                  <p className="text-xs font-medium uppercase tracking-wide text-white/75">Your hustle. Your rewards.</p>
+                </div>
+              </div>
             </div>
 
             {/* Floating cards */}

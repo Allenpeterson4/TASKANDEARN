@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Image, Loader2, Save, Upload } from 'lucide-react';
+import { Image, Loader2, Save, Trash2, Upload } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 
 type Advertisement = { image_path: string | null; target_url: string | null; enabled: boolean };
@@ -60,6 +60,38 @@ export default function AdminAdBannerPanel() {
     setMessage('Dashboard advertisement saved.');
   }
 
+  async function removeBanner() {
+    if (file) {
+      setFile(null);
+      setMessage('Selected image removed.');
+      return;
+    }
+    if (!advertisement.image_path || !window.confirm('Delete the dashboard banner and remove it from storage?')) return;
+
+    setSaving(true);
+    setMessage('');
+    const imagePath = advertisement.image_path;
+    const { data: user } = await supabase.auth.getUser();
+    const { error: updateError } = await supabase.from('dashboard_advertisements').upsert({
+      singleton: true,
+      image_path: null,
+      target_url: null,
+      enabled: false,
+      updated_by: user.user?.id,
+      updated_at: new Date().toISOString(),
+    });
+    if (updateError) {
+      setSaving(false);
+      setMessage(updateError.message);
+      return;
+    }
+
+    setAdvertisement(initial);
+    const { error: removeError } = await supabase.storage.from('dashboard-ads').remove([imagePath]);
+    setSaving(false);
+    setMessage(removeError ? `Banner unpublished, but its image could not be deleted: ${removeError.message}` : 'Dashboard banner deleted.');
+  }
+
   const previewPath = filePreview ?? (advertisement.image_path ? supabase.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path).data.publicUrl : '');
 
   return (
@@ -74,7 +106,10 @@ export default function AdminAdBannerPanel() {
         {previewPath && <div className="overflow-hidden border border-white/10"><img src={previewPath} alt="Advertisement preview" className="max-h-48 w-full object-contain" /></div>}
         <label className="block text-xs text-gray-400">Target link<input type="url" required value={advertisement.target_url ?? ''} onChange={event => setAdvertisement({ ...advertisement, target_url: event.target.value })} placeholder="https://example.com" className="admin-input mt-1" /></label>
         <label className="flex items-center gap-2 text-sm text-gray-300"><input type="checkbox" checked={advertisement.enabled} onChange={event => setAdvertisement({ ...advertisement, enabled: event.target.checked })} className="accent-amber-400" />Publish on dashboard</label>
-        <button disabled={saving} className="flex items-center gap-2 bg-amber-400 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={15} /> : previewPath ? <Save size={15} /> : <Image size={15} />}Save banner</button>
+        <div className="flex flex-wrap gap-2">
+          <button disabled={saving} className="flex items-center gap-2 bg-amber-400 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 className="animate-spin" size={15} /> : previewPath ? <Save size={15} /> : <Image size={15} />}Save banner</button>
+          {previewPath && <button type="button" disabled={saving} onClick={() => void removeBanner()} className="flex items-center gap-2 border border-red-400/25 px-4 py-2.5 text-sm font-semibold text-red-300 hover:bg-red-500/10 disabled:opacity-50"><Trash2 size={15} />{file ? 'Remove selected image' : 'Delete banner'}</button>}
+        </div>
       </>}
       <style>{`.admin-input{width:100%;border:1px solid rgba(255,255,255,.1);background:#0a0a0a;padding:.65rem .75rem;color:#fff;font-size:.875rem;outline:none}.admin-input:focus{border-color:rgba(251,191,36,.55)}`}</style>
     </form>

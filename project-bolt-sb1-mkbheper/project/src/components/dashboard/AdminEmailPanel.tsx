@@ -23,6 +23,15 @@ type EmailTemplate = {
 
 const defaults: SmtpSettings = { enabled: false, host: '', port: 587, secure: false, username: '', from_email: '', from_name: 'MrHustler' };
 
+async function getEdgeFunctionErrorMessage(error: Error) {
+  const context = (error as Error & { context?: unknown }).context;
+  if (context instanceof Response) {
+    const body = await context.clone().json().catch(() => null) as { error?: unknown } | null;
+    if (typeof body?.error === 'string') return body.error;
+  }
+  return error.message;
+}
+
 export default function AdminEmailPanel() {
   const [settings, setSettings] = useState(defaults);
   const [password, setPassword] = useState('');
@@ -47,7 +56,8 @@ export default function AdminEmailPanel() {
     if (errors.length) setMessage(errors[0]?.message ?? 'Could not load email settings.');
     if (settingsResult.data?.settings) {
       const { password_configured, ...safeSettings } = settingsResult.data.settings;
-      setSettings({ ...defaults, ...safeSettings });
+      const loadedSettings = { ...defaults, ...safeSettings };
+      setSettings({ ...loadedSettings, secure: Number(loadedSettings.port) === 465 || loadedSettings.secure });
       setPasswordConfigured(Boolean(password_configured));
     }
     const templateRows = (templatesResult.data ?? []) as EmailTemplate[];
@@ -85,7 +95,7 @@ export default function AdminEmailPanel() {
     setMessage('');
     const { data, error } = await supabase.functions.invoke('admin-email', { body: { action: 'test' } });
     setTesting(false);
-    setMessage(error ? error.message : data?.error ?? `Test email sent to ${data?.recipient ?? 'your admin account'}.`);
+    setMessage(error ? await getEdgeFunctionErrorMessage(error) : data?.error ?? `Test email sent to ${data?.recipient ?? 'your admin account'}.`);
   }
 
   async function saveTemplate(event: React.FormEvent) {
@@ -127,7 +137,7 @@ export default function AdminEmailPanel() {
         <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">SMTP connection</h3><label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings(current => ({ ...current, enabled: event.target.checked }))} className="accent-amber-400" />Enable queued email</label></div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-gray-400">SMTP host<input required value={settings.host} onChange={event => setSettings(current => ({ ...current, host: event.target.value }))} placeholder="smtp.example.com" className="admin-input mt-1" /></label>
-          <label className="text-xs text-gray-400">Port<input required type="number" min="1" max="65535" value={settings.port} onChange={event => setSettings(current => ({ ...current, port: Number(event.target.value) }))} className="admin-input mt-1" /></label>
+          <label className="text-xs text-gray-400">Port<input required type="number" min="1" max="65535" value={settings.port} onChange={event => { const port = Number(event.target.value); setSettings(current => ({ ...current, port, secure: port === 465 || current.secure })); }} className="admin-input mt-1" /></label>
           <label className="text-xs text-gray-400">Username<input value={settings.username} onChange={event => setSettings(current => ({ ...current, username: event.target.value }))} className="admin-input mt-1" /></label>
           <label className="text-xs text-gray-400">Sender email<input required type="email" value={settings.from_email} onChange={event => setSettings(current => ({ ...current, from_email: event.target.value }))} className="admin-input mt-1" /></label>
           <label className="text-xs text-gray-400">Sender name<input value={settings.from_name} onChange={event => setSettings(current => ({ ...current, from_name: event.target.value }))} className="admin-input mt-1" /></label>
