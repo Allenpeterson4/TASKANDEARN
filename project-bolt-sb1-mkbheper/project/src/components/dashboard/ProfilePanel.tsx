@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { User, Phone, Mail, Save, Loader2, CheckCircle, Camera, Lock, Eye, EyeOff } from 'lucide-react';
-import type { Profile } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import type { Profile } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 
 interface Props {
   profile: Profile | null;
@@ -30,7 +30,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
 
   useEffect(() => {
     if (!profile?.user_id) return;
-    supabase.rpc('get_hustle_score', { p_user_id: profile.user_id }).then(({ data }) => {
+    mysqlApi.rpc('get_hustle_score', { p_user_id: profile.user_id }).then(({ data }) => {
       if (typeof data === 'number') setHustleScore(data);
     });
   }, [profile?.user_id, approvedHustles]);
@@ -66,7 +66,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
     setUploadingAvatar(true);
     const extension = file.type === 'image/png' ? 'png' : file.type === 'image/webp' ? 'webp' : 'jpg';
     const path = `${profile.user_id}/avatar-${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await supabase.storage.from('member-avatars').upload(path, file, {
+    const { error: uploadError } = await mysqlApi.storage.from('member-avatars').upload(path, file, {
       contentType: file.type,
       upsert: false,
     });
@@ -76,15 +76,15 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
       return;
     }
 
-    const { data: publicUrl } = supabase.storage.from('member-avatars').getPublicUrl(path);
-    const { data, error } = await supabase.from('profiles')
+    const { data: publicUrl } = mysqlApi.storage.from('member-avatars').getPublicUrl(path);
+    const { data, error } = await mysqlApi.from('profiles')
       .update({ avatar_url: publicUrl.publicUrl })
       .eq('user_id', profile.user_id)
       .select()
       .single();
     setUploadingAvatar(false);
     if (error) {
-      await supabase.storage.from('member-avatars').remove([path]);
+      await mysqlApi.storage.from('member-avatars').remove([path]);
       setMsg(error.message);
       return;
     }
@@ -101,7 +101,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
     }
     setSaving(true);
     try {
-      const { data, error } = await supabase
+      const { data, error } = await mysqlApi
         .from('profiles')
         .update({
           full_name: form.full_name,
@@ -137,8 +137,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
     if (pwForm.next.length < 6) return setPwMsg('Password must be at least 6 characters.');
     setSavingPw(true);
     try {
-      const { error } = await supabase.auth.updateUser({ password: pwForm.next });
-      if (error) throw error;
+      await mysqlApi.auth.changePassword(pwForm.current, pwForm.next);
       setPwMsg('Password changed successfully.');
       setPwForm({ current: '', next: '', confirm: '' });
     } catch (err: unknown) {

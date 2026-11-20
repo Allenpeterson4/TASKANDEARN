@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Bell, CheckCircle, Clock, CreditCard, WalletCards, X } from 'lucide-react';
-import type { TaskCompletion, Withdrawal } from '@/lib/supabase';
+import type { TaskCompletion, Withdrawal } from '@/lib/platformTypes';
 
 type FundingDeposit = { id: string; amount: number; status: string; created_at: string };
 type NotificationItem = { id: string; type: 'system' | 'task' | 'funding' | 'withdrawal'; title: string; body: string; date: string };

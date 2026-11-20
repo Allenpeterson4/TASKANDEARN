@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { AppUser } from '@/lib/mysqlApi';
 import { ClipboardList, History } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import type { Profile, Balance, Task, TaskCompletion, Referral, Withdrawal } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
+import type { Profile, Balance, Task, TaskCompletion, Referral, Withdrawal } from '@/lib/platformTypes';
 import DashSidebar, { DashTopbar, type DashTab } from './DashSidebar';
 import AnnouncementModal from './AnnouncementModal';
 import OverviewPanel from './OverviewPanel';
@@ -21,7 +21,7 @@ import LeaderboardPanel from './LeaderboardPanel';
 import BrandLogo from '@/components/BrandLogo';
 
 interface Props {
-  user: User;
+  user: AppUser;
 }
 
 type FeaturePermission = {
@@ -50,49 +50,67 @@ export default function Dashboard({ user }: Props) {
   const [availablePlanCodes, setAvailablePlanCodes] = useState<string[]>([]);
   const [featureAccess, setFeatureAccess] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function load() {
-      const [
-        { data: prof },
-        { data: bal },
-        { data: taskList },
-        { data: comps },
-        { data: refs },
-        { data: wds },
-        { data: deposits },
-        { data: paidPlans },
-        { data: activeSubscription },
-      ] = await Promise.all([
-        supabase.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
-        supabase.from('balances').select('*').eq('user_id', user.id).maybeSingle(),
-        supabase.from('tasks').select('*').eq('is_active', true).order('sort_order').order('created_at', { ascending: false }),
-        supabase.from('task_completions').select('*').eq('user_id', user.id),
-        supabase.from('referrals').select('*').eq('referrer_id', user.id),
-        supabase.from('withdrawals').select('*').eq('user_id', user.id).order('requested_at', { ascending: false }),
-        supabase.from('funding_deposits').select('id, amount, status, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
-        supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
-        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
-      ]);
-      setProfile(prof ?? null);
-      setBalance(bal ?? null);
-      setTasks(taskList ?? []);
-      setCompletions(comps ?? []);
-      setReferrals(refs ?? []);
-      setWithdrawals(wds ?? []);
-      setFundingDeposits(deposits ?? []);
-      const activePlanCodes = (paidPlans ?? []).map(plan => plan.plan_code);
-      setAvailablePlanCodes(activePlanCodes);
-      setCurrentPlanCode(activeSubscription?.plan_code ?? 'free');
-      setLoading(false);
-      setShowModal(true);
-    }
-    load();
-  }, [user.id]);
+  const [loadError, setLoadError] = useState('');
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
     let active = true;
-    supabase.from('feature_permissions').select('feature_key, free_enabled, premium_enabled, settings').then(({ data }) => {
+    async function load() {
+      setLoading(true);
+      setLoadError('');
+      try {
+        const results = await Promise.all([
+          mysqlApi.from('profiles').select('*').eq('user_id', user.id).maybeSingle(),
+          mysqlApi.from('balances').select('*').eq('user_id', user.id).maybeSingle(),
+          mysqlApi.from('tasks').select('*').eq('is_active', true).order('sort_order').order('created_at', { ascending: false }),
+          mysqlApi.from('task_completions').select('*').eq('user_id', user.id),
+          mysqlApi.from('referrals').select('*').eq('referrer_id', user.id),
+          mysqlApi.from('withdrawals').select('*').eq('user_id', user.id).order('requested_at', { ascending: false }),
+          mysqlApi.from('funding_deposits').select('id, amount, status, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(50),
+          mysqlApi.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
+          mysqlApi.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+        ]);
+        if (!active) return;
+        const [
+          { data: prof, error: profileError },
+          { data: bal, error: balanceError },
+          { data: taskList, error: tasksError },
+          { data: comps, error: completionsError },
+          { data: refs, error: referralsError },
+          { data: wds, error: withdrawalsError },
+          { data: deposits, error: depositsError },
+          { data: paidPlans, error: plansError },
+          { data: activeSubscription, error: subscriptionError },
+        ] = results;
+        const firstError = [
+          profileError, balanceError, tasksError, completionsError, referralsError,
+          withdrawalsError, depositsError, plansError, subscriptionError,
+        ].find(Boolean);
+        if (firstError) setLoadError(firstError.message);
+        setProfile(prof ?? null);
+        setBalance(bal ?? null);
+        setTasks(taskList ?? []);
+        setCompletions(comps ?? []);
+        setReferrals(refs ?? []);
+        setWithdrawals(wds ?? []);
+        setFundingDeposits(deposits ?? []);
+        const activePlanCodes = (paidPlans ?? []).map((plan: { plan_code: string }) => plan.plan_code);
+        setAvailablePlanCodes(activePlanCodes);
+        setCurrentPlanCode(activeSubscription?.plan_code ?? 'free');
+        if (!firstError) setShowModal(true);
+      } catch (error) {
+        if (active) setLoadError(error instanceof Error ? error.message : 'Dashboard data could not be loaded.');
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void load();
+    return () => { active = false; };
+  }, [loadAttempt, user.id]);
+
+  useEffect(() => {
+    let active = true;
+    mysqlApi.from('feature_permissions').select('feature_key, free_enabled, premium_enabled, settings').then(({ data }) => {
       if (!active) return;
       const premium = currentPlanCode !== 'free';
       const permissions = (data ?? []) as FeaturePermission[];
@@ -116,11 +134,11 @@ export default function Dashboard({ user }: Props) {
     let active = true;
     async function refreshPlanAvailability() {
       const [{ data: plans }, { data: subscription }] = await Promise.all([
-        supabase.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
-        supabase.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+        mysqlApi.from('subscription_plans').select('plan_code').eq('is_active', true).gt('price', 0),
+        mysqlApi.from('user_subscriptions').select('plan_code').eq('user_id', user.id).eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (active) {
-        setAvailablePlanCodes((plans ?? []).map(plan => plan.plan_code));
+        setAvailablePlanCodes((plans ?? []).map((plan: { plan_code: string }) => plan.plan_code));
         setCurrentPlanCode(subscription?.plan_code ?? 'free');
       }
     }
@@ -135,7 +153,11 @@ export default function Dashboard({ user }: Props) {
   }, [user.id]);
 
   async function handleLogout() {
-    await supabase.auth.signOut();
+    try {
+      await mysqlApi.auth.signOut();
+    } catch (error) {
+      setLoadError(error instanceof Error ? error.message : 'Could not sign out. Please try again.');
+    }
   }
 
   if (loading) {
@@ -199,6 +221,15 @@ export default function Dashboard({ user }: Props) {
 
         <main className="flex-1 p-4 sm:p-6 overflow-y-auto">
           <div className="max-w-5xl mx-auto">
+            {loadError && (
+              <div role="alert" className="mb-5 flex flex-wrap items-center justify-between gap-3 border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-sm text-amber-100">
+                <p>Dashboard data could not be loaded: {loadError}</p>
+                <div className="flex gap-2">
+                  <button type="button" onClick={() => setLoadAttempt(attempt => attempt + 1)} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-200">Retry</button>
+                  <button type="button" onClick={() => void handleLogout()} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-gray-200">Sign out to login</button>
+                </div>
+              </div>
+            )}
             <DashboardAdBanner />
             {tab === 'overview' && (
               <OverviewPanel

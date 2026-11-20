@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Circle, Info } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
-import type { Task, TaskCompletion } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
+import type { Task, TaskCompletion } from '@/lib/platformTypes';
 
 type Settings = {
   hustler_withdrawals_enabled: boolean;
@@ -18,6 +18,10 @@ type Settings = {
 type ActivityRow = { activity_date: string; online_seconds?: number; active_seconds?: number; interactions?: number };
 type Requirement = { label: string; value: string; complete: boolean };
 
+function progressPercent(current: number, target: number) {
+  return `${Math.round((Math.min(current, target) / target) * 100)}%`;
+}
+
 const defaults: Settings = {
   hustler_withdrawals_enabled: true,
   minimum_hustles: 0,
@@ -29,8 +33,6 @@ const defaults: Settings = {
   minimum_interactions: 0,
   measurement_days: 30,
 };
-
-const levels = ['Baby Hustler', 'Nepo Hustler', 'Pako Hustler', 'Street Hustler', 'Oga Hustler', 'Odogwu Hustler', 'President'];
 
 function levelForHustles(count: number) {
   if (count >= 1000) return 6;
@@ -59,9 +61,9 @@ export default function WithdrawalProgressCard({ userId, approvedHustles, referr
     let active = true;
     async function loadRequirements() {
       const [{ data: settingsData }, { data: checkinData }, { data: activityData }] = await Promise.all([
-        supabase.from('platform_settings').select('hustler_withdrawals_enabled, minimum_hustles, require_all_hustles, minimum_hustle_level, minimum_referrals, minimum_checkin_streak, minimum_online_minutes, minimum_interactions, measurement_days').eq('singleton', true).maybeSingle(),
-        supabase.from('daily_checkins').select('checkin_date, streak').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('user_activity_daily').select('*').eq('user_id', userId).gte('activity_date', new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)),
+        mysqlApi.from('platform_settings').select('hustler_withdrawals_enabled, minimum_hustles, require_all_hustles, minimum_hustle_level, minimum_referrals, minimum_checkin_streak, minimum_online_minutes, minimum_interactions, measurement_days').eq('singleton', true).maybeSingle(),
+        mysqlApi.from('daily_checkins').select('checkin_date, streak').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
+        mysqlApi.from('user_activity_daily').select('*').eq('user_id', userId).gte('activity_date', new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)),
       ]);
       if (!active) return;
       if (settingsData) setSettings({ ...defaults, ...settingsData });
@@ -85,13 +87,13 @@ export default function WithdrawalProgressCard({ userId, approvedHustles, referr
   const fundedTasks = tasks.filter(task => task.is_active && task.is_funded);
   const allHustlesComplete = fundedTasks.every(task => approvedTaskIds.has(task.id));
   const requirements: Requirement[] = [];
-  if (settings.minimum_hustles > 0) requirements.push({ label: 'Approved hustles', value: `${Math.min(approvedHustles, settings.minimum_hustles)} / ${settings.minimum_hustles}`, complete: approvedHustles >= settings.minimum_hustles });
-  if (settings.minimum_hustle_level > 0) requirements.push({ label: 'Hustle level', value: `${levels[currentLevel]} · requires ${levels[Math.min(settings.minimum_hustle_level, levels.length - 1)]}`, complete: currentLevel >= settings.minimum_hustle_level });
-  if (settings.minimum_checkin_streak > 0) requirements.push({ label: 'Check-in streak', value: `${Math.min(streak, settings.minimum_checkin_streak)} / ${settings.minimum_checkin_streak} days`, complete: streak >= settings.minimum_checkin_streak });
-  if (settings.minimum_referrals > 0) requirements.push({ label: 'Minimum referrals', value: `${Math.min(referralCount, settings.minimum_referrals)} / ${settings.minimum_referrals}`, complete: referralCount >= settings.minimum_referrals });
-  if (settings.minimum_online_minutes > 0) requirements.push({ label: 'Online activity', value: `${Math.min(onlineMinutes, settings.minimum_online_minutes)} / ${settings.minimum_online_minutes} min`, complete: onlineMinutes >= settings.minimum_online_minutes });
-  if (settings.minimum_interactions > 0) requirements.push({ label: 'Interactions', value: `${Math.min(interactions, settings.minimum_interactions)} / ${settings.minimum_interactions}`, complete: interactions >= settings.minimum_interactions });
-  if (settings.require_all_hustles) requirements.push({ label: 'Available hustles', value: `${fundedTasks.filter(task => approvedTaskIds.has(task.id)).length} / ${fundedTasks.length}`, complete: allHustlesComplete });
+  if (settings.minimum_hustles > 0) requirements.push({ label: 'Approved hustles', value: progressPercent(approvedHustles, settings.minimum_hustles), complete: approvedHustles >= settings.minimum_hustles });
+  if (settings.minimum_hustle_level > 0) requirements.push({ label: 'Hustle level', value: progressPercent(currentLevel, settings.minimum_hustle_level), complete: currentLevel >= settings.minimum_hustle_level });
+  if (settings.minimum_checkin_streak > 0) requirements.push({ label: 'Check-in streak', value: progressPercent(streak, settings.minimum_checkin_streak), complete: streak >= settings.minimum_checkin_streak });
+  if (settings.minimum_referrals > 0) requirements.push({ label: 'Minimum referrals', value: progressPercent(referralCount, settings.minimum_referrals), complete: referralCount >= settings.minimum_referrals });
+  if (settings.minimum_online_minutes > 0) requirements.push({ label: 'Online activity', value: progressPercent(onlineMinutes, settings.minimum_online_minutes), complete: onlineMinutes >= settings.minimum_online_minutes });
+  if (settings.minimum_interactions > 0) requirements.push({ label: 'Interactions', value: progressPercent(interactions, settings.minimum_interactions), complete: interactions >= settings.minimum_interactions });
+  if (settings.require_all_hustles) requirements.push({ label: 'Available hustles', value: fundedTasks.length ? progressPercent(fundedTasks.filter(task => approvedTaskIds.has(task.id)).length, fundedTasks.length) : '100%', complete: allHustlesComplete });
 
   const completedCount = requirements.filter(requirement => requirement.complete).length;
   const progress = requirements.length ? Math.round((completedCount / requirements.length) * 100) : settings.hustler_withdrawals_enabled ? 100 : 0;

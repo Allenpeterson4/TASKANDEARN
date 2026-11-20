@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock, ChevronDown } from 'lucide-react';
-import type { Task, TaskCompletion } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import { Zap, CheckCircle, Clock, Filter, Loader2, ClipboardList, ExternalLink, Lock } from 'lucide-react';
+import type { Task, TaskCompletion } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 import CampaignSubmissionPanel from './CampaignSubmissionPanel';
 
 interface Props {
@@ -18,12 +18,24 @@ interface Props {
 
 const planRanks: Record<string, number> = { free: 0, premium: 1, vip: 2, president: 3 };
 
+function getTaskDestination(taskUrl: string) {
+  try {
+    const destination = new URL(taskUrl);
+    return destination.protocol === 'http:' || destination.protocol === 'https:'
+      ? destination.toString()
+      : null;
+  } catch {
+    return null;
+  }
+}
+
 export default function TasksPanel({ tasks, completions, userId, currentPlanCode, availablePlanCodes, allowCampaigns, onUpgrade, onCompletionAdded, onBalanceUpdated }: Props) {
   const [cat, setCat] = useState('All');
   const [submitting, setSubmitting] = useState<string | null>(null);
   const [toast, setToast] = useState('');
   const [proofs, setProofs] = useState<Record<string, string>>({});
   const [proofFiles, setProofFiles] = useState<Record<string, File | undefined>>({});
+  const [openedTasks, setOpenedTasks] = useState<Record<string, boolean>>({});
   const [expandedProof, setExpandedProof] = useState<Record<string, boolean>>({});
 
   const taskCompletionMap = new Map(completions.map(completion => [completion.task_id, completion]));
@@ -39,8 +51,8 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
     let active = true;
     async function refreshVerifiedTask() {
       const [{ data: latestCompletions }, { data: latestBalance }] = await Promise.all([
-        supabase.from('task_completions').select('*').eq('user_id', userId),
-        supabase.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
+        mysqlApi.from('task_completions').select('*').eq('user_id', userId),
+        mysqlApi.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
       ]);
       if (!active) return;
       const currentIds = new Set(completions.map(completion => completion.id));
@@ -81,13 +93,13 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
       if (proofFile) {
         const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '-');
         uploadedPath = `${userId}/${crypto.randomUUID()}-${safeName}`;
-        const { error: uploadError } = await supabase.storage.from('task-proofs').upload(uploadedPath, proofFile, {
+        const { error: uploadError } = await mysqlApi.storage.from('task-proofs').upload(uploadedPath, proofFile, {
           contentType: proofFile.type,
           upsert: false,
         });
         if (uploadError) throw uploadError;
       }
-      const { data, error } = await supabase.rpc('claim_task', {
+      const { data, error } = await mysqlApi.rpc('claim_task', {
         p_task_id: task.id,
         p_proof_text: proofText || null,
         p_proof_path: uploadedPath,
@@ -95,12 +107,14 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
       if (error) throw error;
       const submitted = data as TaskCompletion;
       const [{ data: reviewed }, { data: currentBalance }] = await Promise.all([
-        supabase.from('task_completions').select('*').eq('id', submitted.id).maybeSingle(),
-        supabase.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
+        mysqlApi.from('task_completions').select('*').eq('id', submitted.id).maybeSingle(),
+        mysqlApi.from('balances').select('reward_balance, referral_balance, total_earned').eq('user_id', userId).maybeSingle(),
       ]);
       const savedCompletion = (reviewed ?? submitted) as TaskCompletion;
       onCompletionAdded(savedCompletion);
       if (currentBalance) onBalanceUpdated(currentBalance);
+      setOpenedTasks(current => ({ ...current, [task.id]: false }));
+      setExpandedProof(current => ({ ...current, [task.id]: false }));
       setProofFiles(current => ({ ...current, [task.id]: undefined }));
       showToast(savedCompletion.status === 'approved'
         ? `Hustle approved! ₦${task.reward.toLocaleString()} credited.`
@@ -108,7 +122,7 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
           ? 'Hustle was automatically rejected. Review its instructions and try again.'
           : `Hustle submitted! ₦${task.reward.toLocaleString()} pending verification.`);
     } catch (error) {
-      if (uploadedPath) await supabase.storage.from('task-proofs').remove([uploadedPath]);
+      if (uploadedPath) await mysqlApi.storage.from('task-proofs').remove([uploadedPath]);
       const message = error instanceof Error ? error.message : 'Unknown submission error';
       showToast(`Could not submit hustle: ${message}`);
     } finally {
@@ -117,18 +131,29 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
   }
 
   async function startTrackedTask(task: Task) {
+    const taskWindow = window.open('about:blank', '_blank');
+    if (!taskWindow) {
+      showToast('Allow pop-ups to open the tracked hustle in a new tab.');
+      return;
+    }
+    taskWindow.opener = null;
     setSubmitting(task.id);
     try {
-      const { data, error } = await supabase.rpc('start_task_verification', {
+      const destination = new URL(task.task_url);
+      if (destination.protocol !== 'http:' && destination.protocol !== 'https:') {
+        throw new Error('This hustle link is invalid.');
+      }
+      const { data, error } = await mysqlApi.rpc('start_task_verification', {
         p_task_id: task.id,
       });
       if (error) throw error;
       const session = data as { id: string };
-      const destination = new URL(task.task_url);
       destination.searchParams.set('tracking_id', session.id);
-      window.location.assign(destination.toString());
+      taskWindow.location.replace(destination.toString());
     } catch (error) {
+      taskWindow.close();
       showToast(error instanceof Error ? error.message : 'Could not start hustle tracking.');
+    } finally {
       setSubmitting(null);
     }
   }
@@ -190,6 +215,17 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
           const requiredPlanUnavailable = planLocked && !availablePlanCodes.includes(task.required_plan_code);
           const campaignUnavailable = !task.is_funded;
           const locked = planLocked || campaignUnavailable;
+          const taskDestination = getTaskDestination(task.task_url);
+          const actionDisabled = done || isSubmitting || (campaignUnavailable && !planLocked) || requiredPlanUnavailable || !taskDestination;
+          const canOpenManualTask = task.verification_mode === 'manual'
+            && !openedTasks[task.id]
+            && !planLocked
+            && !campaignUnavailable
+            && !done
+            && !isSubmitting
+            && !requiredPlanUnavailable
+            && !!taskDestination;
+          const proofVisible = openedTasks[task.id] && expandedProof[task.id];
 
           return (
             <div
@@ -208,20 +244,32 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
 
               <h3 className="text-white font-bold text-sm mb-2">{task.title}</h3>
               <p className="text-gray-400 text-xs leading-relaxed mb-4">{task.description}</p>
-              {task.task_url && task.is_funded && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (task.verification_mode === 'automatic') void startTrackedTask(task);
-                    else window.open(task.task_url, '_blank', 'noopener,noreferrer');
-                  }}
-                  disabled={isSubmitting || done}
-                  className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300 disabled:opacity-50"
-                >
-                  {task.verification_mode === 'automatic' ? 'Start tracked hustle' : 'Open hustle'} <ExternalLink size={13} />
-                </button>
+              {taskDestination && task.is_funded && (
+                task.verification_mode === 'automatic' ? (
+                  <button
+                    type="button"
+                    onClick={() => void startTrackedTask(task)}
+                    disabled={isSubmitting || done}
+                    className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300 disabled:opacity-50"
+                  >
+                    Start tracked hustle <ExternalLink size={13} />
+                  </button>
+                ) : (
+                  <a
+                    href={taskDestination}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={() => {
+                      setOpenedTasks(current => ({ ...current, [task.id]: true }));
+                      setExpandedProof(current => ({ ...current, [task.id]: false }));
+                    }}
+                    className="mb-4 inline-flex items-center gap-1.5 text-amber-400 text-xs font-semibold hover:text-amber-300"
+                  >
+                    Open hustle <ExternalLink size={13} />
+                  </a>
+                )
               )}
-              {task.verification_mode === 'manual' && !done && !locked && expandedProof[task.id] && (
+              {task.verification_mode === 'manual' && taskDestination && !done && !locked && proofVisible && (
                 <div className="mb-4">
                   <label className="block text-xs text-gray-400 mb-1.5">
                     {task.proof_instructions || 'Describe the completed action or upload a screenshot for manual review.'}
@@ -251,8 +299,30 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                   <p className="text-orange-300 font-black text-lg">₦{task.reward.toLocaleString()}</p>
                   <p className="text-gray-600 text-xs">Reward</p>
                 </div>
-                <button
-                  disabled={done || isSubmitting || (campaignUnavailable && !planLocked) || requiredPlanUnavailable}
+                {canOpenManualTask ? (
+                  <a
+                    href={actionDisabled ? undefined : taskDestination ?? undefined}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-disabled={actionDisabled}
+                    onClick={event => {
+                      if (actionDisabled) {
+                        event.preventDefault();
+                        return;
+                      }
+                      setOpenedTasks(current => ({ ...current, [task.id]: true }));
+                      setExpandedProof(current => ({ ...current, [task.id]: false }));
+                    }}
+                    className={`flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                      actionDisabled
+                        ? 'bg-white/5 text-white border border-white/15 cursor-default'
+                        : 'bg-gradient-to-r from-amber-400 to-orange-500 text-black hover:shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5'
+                    }`}
+                  >
+                    <Zap size={14} /> Complete Hustle <ExternalLink size={14} />
+                  </a>
+                ) : <button
+                  disabled={actionDisabled}
                   onClick={() => {
                     if (planLocked) onUpgrade();
                     else if (task.verification_mode === 'automatic') void startTrackedTask(task);
@@ -273,14 +343,17 @@ export default function TasksPanel({ tasks, completions, userId, currentPlanCode
                     requiredPlanUnavailable ? 'Plan unavailable' : <><Lock size={14} /> Upgrade plan</>
                   ) : campaignUnavailable ? (
                     'Awaiting sponsor funding'
+                  ) : !taskDestination ? (
+                    'Link unavailable'
                   ) : task.verification_mode === 'automatic' ? (
                     'Start tracked hustle'
                   ) : (
-                    <><Zap size={14} /> Complete Hustle <ChevronDown size={14} /></>
+                    <><Zap size={14} /> {proofVisible ? 'Submit Proof' : 'Continue to Proof'}</>
                   )}
-                </button>
+                </button>}
               </div>
 
+              {!taskDestination && <p className="mt-3 text-xs text-red-300">This hustle has no valid destination link. Please contact an admin to add one.</p>}
               {planLocked && !campaignUnavailable && <p className="mt-3 text-xs text-amber-300">Requires the {task.required_plan_code[0].toUpperCase() + task.required_plan_code.slice(1)} plan.</p>}
               {planLocked && campaignUnavailable && <p className="mt-3 text-xs text-amber-300">Requires {task.required_plan_code} access; this sponsor campaign is also still being configured.</p>}
               {!planLocked && campaignUnavailable && <p className="mt-3 text-xs text-gray-500">This sponsor campaign is being configured and cannot be claimed yet.</p>}

@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 import { useSiteContent } from '@/hooks/useSiteContent';
 
 type LogoVariant = 'site' | 'preloader';
@@ -30,7 +30,7 @@ export default function BrandLogo({
     ? [content[contentKey], content['branding.site_logo'], content['branding.logo']]
     : [content[contentKey], content['branding.logo']]
   ).find(value => value && !/^https?:\/\//i.test(value)) ?? '';
-  const imageUrl = path ? supabase.storage.from('site-media').getPublicUrl(path).data.publicUrl : null;
+  const imageUrl = path ? mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl : null;
   const image = imageUrl ? <img src={imageUrl} alt="MrHustler logo" loading="eager" fetchPriority="high" className="h-full w-full object-contain" /> : null;
 
   return (

@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 export default function ActivityTracker({ userId }: { userId: string }) {
   const lastSentAt = useRef(Date.now());
@@ -15,7 +15,7 @@ export default function ActivityTracker({ userId }: { userId: string }) {
       lastSentAt.current = now;
       const interactions = pendingInteractions.current;
       pendingInteractions.current = 0;
-      const { error } = await supabase.rpc('record_user_activity', {
+      const { error } = await mysqlApi.rpc('record_user_activity', {
         p_elapsed_seconds: elapsed,
         p_interactions: interactions,
       });

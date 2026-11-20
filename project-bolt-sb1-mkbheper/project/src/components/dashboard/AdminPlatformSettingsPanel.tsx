@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Settings = {
   referral_signup_reward: number;
@@ -46,10 +46,10 @@ export default function AdminPlatformSettingsPanel() {
 
   useEffect(() => {
     Promise.all([
-      supabase.from('platform_settings').select('*').eq('singleton', true).maybeSingle(),
-      supabase.from('feature_permissions').select('*').order('feature_key'),
-      supabase.from('leaderboard_reward_settings').select('*').order('rank'),
-      supabase.from('subscription_plans').select('plan_code, name').eq('is_active', true).gt('price', 0).order('price'),
+      mysqlApi.from('platform_settings').select('*').eq('singleton', true).maybeSingle(),
+      mysqlApi.from('feature_permissions').select('*').order('feature_key'),
+      mysqlApi.from('leaderboard_reward_settings').select('*').order('rank'),
+      mysqlApi.from('subscription_plans').select('plan_code, name').eq('is_active', true).gt('price', 0).order('price'),
     ]).then(([settingsResult, featureResult, rewardsResult, plansResult]) => {
       if (settingsResult.error || featureResult.error || rewardsResult.error) setMessage(settingsResult.error?.message ?? featureResult.error?.message ?? rewardsResult.error?.message ?? 'Could not load settings.');
       if (settingsResult.data) setSettings({ ...defaults, ...(settingsResult.data as Settings) });
@@ -91,13 +91,13 @@ export default function AdminPlatformSettingsPanel() {
       return;
     }
     setSaving(true);
-    const { data: user } = await supabase.auth.getUser();
+    const user = await mysqlApi.auth.getCurrentUser();
     const [settingsResult, ...featureResults] = await Promise.all([
-      supabase.from('platform_settings').update({ ...settings, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('singleton', true),
-      ...features.map(feature => supabase.from('feature_permissions').update({ free_enabled: feature.free_enabled, premium_enabled: feature.premium_enabled, settings: feature.settings, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('feature_key', feature.feature_key)),
-      ...leaderboardRewards.map(reward => supabase.from('leaderboard_reward_settings').update({ amount: reward.amount, enabled: reward.enabled, updated_by: user.user?.id, updated_at: new Date().toISOString() }).eq('rank', reward.rank)),
+      mysqlApi.from('platform_settings').update({ ...settings, updated_by: user?.id, updated_at: new Date().toISOString() }).eq('singleton', true),
+      ...features.map(feature => mysqlApi.from('feature_permissions').update({ free_enabled: feature.free_enabled, premium_enabled: feature.premium_enabled, settings: feature.settings, updated_by: user?.id, updated_at: new Date().toISOString() }).eq('feature_key', feature.feature_key)),
+      ...leaderboardRewards.map(reward => mysqlApi.from('leaderboard_reward_settings').update({ amount: reward.amount, enabled: reward.enabled, updated_by: user?.id, updated_at: new Date().toISOString() }).eq('rank', reward.rank)),
     ]);
-    const reviewResult = settingsResult.error ? null : await supabase.rpc('admin_set_auto_review_mode', { p_mode: settings.auto_review_mode });
+    const reviewResult = settingsResult.error ? null : await mysqlApi.rpc('admin_set_auto_review_mode', { p_mode: settings.auto_review_mode });
     setSaving(false);
     const error = settingsResult.error ?? featureResults.find(result => result.error)?.error ?? reviewResult?.error;
     setMessage(error ? error.message : settings.auto_review_mode === 'manual' ? 'Platform controls saved.' : `Platform controls saved. ${Number(reviewResult?.data ?? 0)} pending Hustles processed.`);
@@ -107,7 +107,7 @@ export default function AdminPlatformSettingsPanel() {
     setSaving(true);
     const now = new Date();
     const periodStart = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
-    const { data, error } = await supabase.rpc('admin_issue_leaderboard_rewards', { p_category: leaderboardCategory, p_period_start: periodStart });
+    const { data, error } = await mysqlApi.rpc('admin_issue_leaderboard_rewards', { p_category: leaderboardCategory, p_period_start: periodStart });
     setSaving(false);
     setMessage(error ? error.message : `Issued rank rewards to ${Number(data ?? 0)} hustlers. This category is locked for the month.`);
   }

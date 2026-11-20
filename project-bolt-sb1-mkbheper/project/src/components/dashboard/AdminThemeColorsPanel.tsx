@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { Check, Palette, RotateCcw, Save } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { defaultThemeColors, type ThemeColors } from '@/hooks/themeContext';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const colorFields: { key: keyof ThemeColors; label: string; group: string }[] = [
   { key: 'accent', label: 'Primary accent', group: 'Brand colors' },
@@ -37,13 +37,13 @@ export default function AdminThemeColorsPanel() {
     event.preventDefault();
     setSaving(true);
     setMessage('');
-    const { data: user } = await supabase.auth.getUser();
-    const { error } = await supabase.from('site_content').upsert({
+    const user = await mysqlApi.auth.getCurrentUser();
+    const { error } = await mysqlApi.from('site_content').upsert({
       content_key: 'theme.colors',
       title: 'Interface color palette',
       body: JSON.stringify(colors),
       updated_at: new Date().toISOString(),
-      updated_by: user.user?.id,
+      updated_by: user?.id,
     }, { onConflict: 'content_key' });
     setSaving(false);
     setMessage(error ? error.message : 'Palette saved and published across the site.');

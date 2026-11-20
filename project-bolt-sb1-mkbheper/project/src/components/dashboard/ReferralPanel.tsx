@@ -1,22 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Copy, CheckCircle, Users, Gift, TrendingUp, Share2, ExternalLink, UserRound, Loader2 } from 'lucide-react';
-import type { Profile, Balance, Referral } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import type { Profile, Balance, Referral } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 import { useSiteContent } from '@/hooks/useSiteContent';
-
-const referralStepKeys = [
-  'referrals.how_it_works.1',
-  'referrals.how_it_works.2',
-  'referrals.how_it_works.3',
-  'referrals.how_it_works.4',
-];
-
-const defaultReferralSteps = [
-  'Copy and share your unique referral link via WhatsApp, social media, or anywhere.',
-  'Your friend signs up using your link and creates a verified account.',
-  'When they complete their first hustle, you receive the configured referral bonus.',
-  'You continue earning referral rewards as your invite completes hustles.',
-];
+import {
+  formatReferralRange,
+  legacyReferralStepKeys,
+  parseReferralConfig,
+  referralConfigKey,
+  referralTierColors,
+} from '@/lib/referralConfig';
 
 type ReferredProfile = {
   referred_id: string;
@@ -40,7 +33,8 @@ interface Props {
 }
 
 export default function ReferralPanel({ profile, balance, referrals, isPremium, allowCustomReferralCode, onProfileUpdated, onBalanceUpdated }: Props) {
-  const referralCopy = useSiteContent(referralStepKeys);
+  const referralCopy = useSiteContent([referralConfigKey, ...legacyReferralStepKeys]);
+  const config = parseReferralConfig(referralCopy[referralConfigKey], legacyReferralStepKeys.map(key => referralCopy[key]));
   const [copied, setCopied] = useState(false);
   const [transferring, setTransferring] = useState(false);
   const [message, setMessage] = useState('');
@@ -65,7 +59,7 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
   useEffect(() => {
     let active = true;
     setLoadingProfiles(true);
-    supabase.rpc('get_my_referral_profiles').then(({ data, error }) => {
+    mysqlApi.rpc('get_my_referral_profiles').then(({ data, error }) => {
       if (!active) return;
       setLoadingProfiles(false);
       if (error) {
@@ -81,7 +75,7 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
   async function saveCustomCode(event: React.FormEvent) {
     event.preventDefault();
     setSavingCode(true);
-    const { data, error } = await supabase.rpc('set_custom_referral_code', { p_code: customCode });
+    const { data, error } = await mysqlApi.rpc('set_custom_referral_code', { p_code: customCode });
     setSavingCode(false);
     if (error) {
       setMessage(error.message);
@@ -95,7 +89,7 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
   async function transferReferralEarnings() {
     setTransferring(true);
     setMessage('');
-    const { data, error } = await supabase.rpc('transfer_referral_balance');
+    const { data, error } = await mysqlApi.rpc('transfer_referral_balance');
     setTransferring(false);
     if (error) {
       setMessage(error.message);
@@ -104,13 +98,6 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
     onBalanceUpdated(data as Balance);
     setMessage('Referral earnings transferred to your Hustler Wallet.');
   }
-
-  const tiers = [
-    { level: 'Bronze',   min: 1,  max: 4,  label: '1–4 referrals',  color: 'from-amber-700 to-amber-600', badge: 'border-amber-700/30' },
-    { level: 'Silver',   min: 5,  max: 19, label: '5–19 referrals', color: 'from-gray-400 to-gray-300',   badge: 'border-gray-400/30' },
-    { level: 'Gold',     min: 20, max: 49, label: '20–49 referrals',color: 'from-amber-400 to-yellow-300',badge: 'border-amber-400/30', hot: true },
-    { level: 'Platinum', min: 50, max: 999,label: '50+ referrals',  color: 'from-blue-400 to-cyan-300',   badge: 'border-blue-400/30' },
-  ];
 
   return (
     <div className="min-w-0 space-y-5 sm:space-y-6">
@@ -210,11 +197,10 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
 
       {/* How it works steps */}
       <div className="min-w-0 bg-[#111] border border-white/6 rounded-2xl p-4 sm:p-6">
-        <h3 className="text-white font-bold text-sm mb-4">How Referrals Work</h3>
+        <h3 className="text-white font-bold text-sm mb-4">{config.stepsTitle}</h3>
         <div className="space-y-4">
-          {defaultReferralSteps.map((fallback, index) => {
+          {config.steps.map((text, index) => {
             const step = String(index + 1);
-            const text = referralCopy[referralStepKeys[index]] || fallback;
             return (
             <div key={step} className="flex gap-4">
               <div className="w-7 h-7 rounded-full bg-amber-400/15 border border-amber-400/25 flex items-center justify-center flex-shrink-0">
@@ -230,14 +216,15 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
       {/* Tier table */}
       <div className="min-w-0 overflow-hidden bg-[#111] border border-white/6 rounded-2xl">
         <div className="px-5 py-4 border-b border-white/5">
-          <h3 className="text-white font-bold text-sm">Referral Reward Tiers</h3>
+          <h3 className="text-white font-bold text-sm">{config.tiersTitle}</h3>
         </div>
         <div className="divide-y divide-white/4">
-          {tiers.map(tier => {
-            const active = totalReferrals >= tier.min && totalReferrals <= tier.max;
+          {config.tiers.map(tier => {
+            const active = totalReferrals >= tier.minReferrals && (tier.maxReferrals === null || totalReferrals <= tier.maxReferrals);
+            const style = referralTierColors[tier.color];
             return (
               <div
-                key={tier.level}
+                key={tier.id}
                 className={`flex flex-wrap items-center justify-between gap-3 px-4 py-3.5 transition-colors sm:px-5 ${
                   active ? 'bg-amber-400/4' : 'hover:bg-white/2'
                 }`}
@@ -245,10 +232,10 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
                 <div className="flex min-w-0 items-center gap-3">
                   {active && <CheckCircle size={14} className="text-green-400 flex-shrink-0" />}
                   <div>
-                    <span className={`inline-block px-2.5 py-1 rounded-lg text-xs font-black bg-gradient-to-r ${tier.color} text-black mb-1`}>
-                      {tier.level}
+                    <span className={`mb-1 inline-block rounded-lg bg-gradient-to-r px-2.5 py-1 text-xs font-black text-black ${style.gradient}`}>
+                      {tier.name}
                     </span>
-                    <p className="text-gray-400 text-xs">{tier.label}</p>
+                    <p className="text-gray-400 text-xs">{formatReferralRange(tier)}</p>
                   </div>
                 </div>
                 {active && (

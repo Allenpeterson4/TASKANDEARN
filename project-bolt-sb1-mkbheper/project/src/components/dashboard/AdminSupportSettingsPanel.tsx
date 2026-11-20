@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const widgetKey = 'support.live_chat.widget_code';
 
@@ -11,7 +11,7 @@ export default function AdminSupportSettingsPanel() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    supabase.from('site_content').select('body').eq('content_key', widgetKey).maybeSingle().then(({ data, error }) => {
+    mysqlApi.from('site_content').select('body').eq('content_key', widgetKey).maybeSingle().then(({ data, error }) => {
       if (error) setMessage(error.message);
       setCode(data?.body ?? '');
       setLoading(false);
@@ -21,7 +21,7 @@ export default function AdminSupportSettingsPanel() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from('site_content').upsert({
+    const { error } = await mysqlApi.from('site_content').upsert({
       content_key: widgetKey,
       title: 'Live Chat Widget Code',
       body: code.trim(),

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { CircleDollarSign, Users, WalletCards } from 'lucide-react';
-import type { Balance, Profile, Referral, Withdrawal } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import type { Balance, Profile, Referral, Withdrawal } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 import FundAccountPanel from './FundAccountPanel';
 import ReferralPanel from './ReferralPanel';
 import WithdrawalPanel from './WithdrawalPanel';
@@ -39,7 +39,7 @@ export default function WalletPanel({ profile, balance, referrals, withdrawals, 
     event.preventDefault();
     setTransferring(true);
     setTransferMessage('');
-    const { data, error } = await supabase.rpc('transfer_earnings_to_user', {
+    const { data, error } = await mysqlApi.rpc('transfer_earnings_to_user', {
       p_recipient: recipient.trim(),
       p_amount: Number(transferAmount),
     });

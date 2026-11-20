@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, CircleDollarSign, Flag, Megaphone, RefreshCw, Users, WalletCards } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 import AdminStorageCleanupPanel from './AdminStorageCleanupPanel';
 
 type Metrics = {
@@ -27,7 +27,7 @@ export default function AdminMetricsPanel() {
     let active = true;
     async function load() {
       setRefreshing(true);
-      const { data, error: resultError } = await supabase.rpc('admin_dashboard_metrics');
+      const { data, error: resultError } = await mysqlApi.rpc('admin_dashboard_metrics');
       if (!active) return;
       if (resultError) setError(resultError.message);
       else {

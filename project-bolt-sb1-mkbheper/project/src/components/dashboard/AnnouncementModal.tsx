@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Gift, Loader2, X } from 'lucide-react';
-import type { Balance } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import type { Balance } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type SocialLink = { label: string; url: string };
 type Announcement = { title: string; message: string; enabled: boolean; welcome_bonus: number; require_social: boolean; social_links: SocialLink[] };
@@ -27,8 +27,8 @@ export default function AnnouncementModal({ userId, fullName, onClose, onClaimOf
     let active = true;
     async function load() {
       const [{ data: config }, { data: claim }] = await Promise.all([
-        supabase.from('platform_announcements').select('title, message, enabled, welcome_bonus, require_social, social_links').eq('singleton', true).maybeSingle(),
-        supabase.from('welcome_bonus_claims').select('user_id').eq('user_id', userId).maybeSingle(),
+        mysqlApi.from('platform_announcements').select('title, message, enabled, welcome_bonus, require_social, social_links').eq('singleton', true).maybeSingle(),
+        mysqlApi.from('welcome_bonus_claims').select('user_id').eq('user_id', userId).maybeSingle(),
       ]);
       if (!active) return;
       if (config?.enabled) setAnnouncement(config as Announcement);
@@ -44,13 +44,13 @@ export default function AnnouncementModal({ userId, fullName, onClose, onClaimOf
     setClaiming(true);
     setMessage('');
     const socialConfirmed = announcement.require_social && confirmed && openedLinks.length === announcement.social_links.length;
-    const { data, error } = await supabase.rpc('claim_welcome_bonus', { p_social_confirmed: socialConfirmed });
+    const { data, error } = await mysqlApi.rpc('claim_welcome_bonus', { p_social_confirmed: socialConfirmed });
     if (error) {
       setMessage(error.message);
       setClaiming(false);
       return;
     }
-    const { data: balance } = await supabase.from('balances').select('*').eq('user_id', userId).maybeSingle();
+    const { data: balance } = await mysqlApi.from('balances').select('*').eq('user_id', userId).maybeSingle();
     if (balance) onBalanceUpdated(balance as Balance);
     setClaimed(true);
     setMessage(`Welcome bonus of ₦${Number(data).toLocaleString()} added to your Hustler Wallet.`);

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { MessageCircle, Mail, Phone, ChevronDown, ChevronUp, Send, Loader2, CheckCircle } from 'lucide-react';
 import { openExternalChat } from '@/lib/externalChat';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const faqs = [
   { q: 'How long does withdrawal take?', a: 'Most withdrawals are processed within 2 hours. During peak periods it may take up to 24 hours.' },
@@ -41,7 +41,7 @@ export default function SupportPanel({ isPremium, prioritySupport }: { isPremium
     e.preventDefault();
     setLoading(true);
     setError('');
-    const { data, error: submitError } = await supabase.rpc('submit_support_ticket', {
+    const { data, error: submitError } = await mysqlApi.rpc('submit_support_ticket', {
       p_subject: form.subject.trim(),
       p_body: form.message.trim(),
     });

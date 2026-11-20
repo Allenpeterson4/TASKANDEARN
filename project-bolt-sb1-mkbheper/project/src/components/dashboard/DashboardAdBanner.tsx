@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Advertisement = { image_path: string; target_url: string; enabled: boolean };
 
@@ -8,7 +8,7 @@ export default function DashboardAdBanner() {
 
   useEffect(() => {
     let active = true;
-    supabase.from('dashboard_advertisements').select('image_path, target_url, enabled').eq('singleton', true).maybeSingle()
+    mysqlApi.from('dashboard_advertisements').select('image_path, target_url, enabled').eq('singleton', true).maybeSingle()
       .then(({ data }) => {
         if (active && data?.enabled && data.image_path && data.target_url) setAdvertisement(data as Advertisement);
       });
@@ -16,7 +16,7 @@ export default function DashboardAdBanner() {
   }, []);
 
   if (!advertisement) return null;
-  const { data } = supabase.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path);
+  const { data } = mysqlApi.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path);
   return (
     <a href={advertisement.target_url} target="_blank" rel="noopener noreferrer" className="block overflow-hidden border border-white/10" aria-label="Sponsored advertisement">
       <img src={data.publicUrl} alt="Sponsored" className="max-h-40 w-full object-cover" />

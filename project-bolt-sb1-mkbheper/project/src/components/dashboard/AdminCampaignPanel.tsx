@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Campaign = { id: string; user_id: string; title: string; description: string; category: string; reward: number; quantity: number; budget: number; task_url: string; proof_instructions: string; created_at: string };
 
@@ -13,7 +13,7 @@ export default function AdminCampaignPanel() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase.from('campaign_submissions').select('*').eq('status', 'pending').order('created_at');
+    const { data, error } = await mysqlApi.from('campaign_submissions').select('*').eq('status', 'pending').order('created_at');
     if (error) setMessage(error.message);
     setCampaigns((data ?? []) as Campaign[]);
     setLoading(false);
@@ -27,7 +27,7 @@ export default function AdminCampaignPanel() {
       return;
     }
     setSavingId(campaign.id);
-    const { error } = await supabase.rpc('admin_review_campaign_submission', {
+    const { error } = await mysqlApi.rpc('admin_review_campaign_submission', {
       p_submission_id: campaign.id,
       p_decision: decision,
       p_review_note: notes[campaign.id]?.trim() || null,

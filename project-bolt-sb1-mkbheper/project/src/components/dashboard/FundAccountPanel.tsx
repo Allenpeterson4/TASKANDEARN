@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Banknote, Copy, CreditCard, Loader2, Upload } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type FundingSettings = { enabled: boolean; bank_name: string; account_name: string; account_number: string; instructions: string };
 type Deposit = { id: string; amount: number; payment_method: string; provider_reference: string | null; status: string; created_at: string; review_note: string | null };
@@ -22,9 +22,9 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
   const load = useCallback(async () => {
     setLoading(true);
     const [settingsResult, depositsResult, balanceResult] = await Promise.all([
-      supabase.from('funding_settings').select('enabled, bank_name, account_name, account_number, instructions').eq('singleton', true).maybeSingle(),
-      supabase.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at, review_note').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
-      supabase.from('balances').select('fund_balance').eq('user_id', userId).maybeSingle(),
+      mysqlApi.from('funding_settings').select('enabled, bank_name, account_name, account_number, instructions').eq('singleton', true).maybeSingle(),
+      mysqlApi.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at, review_note').eq('user_id', userId).order('created_at', { ascending: false }).limit(20),
+      mysqlApi.from('balances').select('fund_balance').eq('user_id', userId).maybeSingle(),
     ]);
     if (settingsResult.error || depositsResult.error || balanceResult.error) setMessage((settingsResult.error ?? depositsResult.error ?? balanceResult.error)?.message ?? 'Could not load funding details.');
     setSettings((settingsResult.data as FundingSettings | null) ?? emptySettings);
@@ -44,16 +44,24 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
       if (method === 'manual' && proofFile) {
         const safeName = proofFile.name.replace(/[^a-zA-Z0-9._-]/g, '-');
         uploadedPath = `${userId}/${crypto.randomUUID()}-${safeName}`;
-        const { error } = await supabase.storage.from('funding-proofs').upload(uploadedPath, proofFile, { contentType: proofFile.type, upsert: false });
+        const { error } = await mysqlApi.storage.from('funding-proofs').upload(uploadedPath, proofFile, { contentType: proofFile.type, upsert: false });
         if (error) throw error;
       }
-      const { error } = await supabase.rpc('submit_funding_deposit', { p_amount: Number(amount), p_payment_method: method, p_proof_text: method === 'manual' ? proof : null, p_proof_path: uploadedPath });
+      const { data, error } = await mysqlApi.rpc('submit_funding_deposit', { p_amount: Number(amount), p_payment_method: method, p_proof_text: method === 'manual' ? proof : null, p_proof_path: uploadedPath });
       if (error) throw error;
-      setMessage(method === 'manual' ? 'Payment proof submitted. Admin approval is required before your Fund Wallet is credited.' : `${method === 'paystack' ? 'Paystack' : 'Flutterwave'} payment initialized. Your Fund Wallet is credited after provider confirmation.`);
+      if (method !== 'manual') {
+        const checkoutUrl = (data as { checkout_url?: unknown } | null)?.checkout_url;
+        if (typeof checkoutUrl !== 'string' || !/^https:\/\//i.test(checkoutUrl)) {
+          throw new Error('The payment provider did not return a valid checkout link.');
+        }
+        window.location.assign(checkoutUrl);
+        return;
+      }
+      setMessage('Payment proof submitted. Admin approval is required before your Fund Wallet is credited.');
       setAmount(''); setProof(''); setProofFile(undefined);
       await load();
     } catch (error) {
-      if (uploadedPath) await supabase.storage.from('funding-proofs').remove([uploadedPath]);
+      if (uploadedPath) await mysqlApi.storage.from('funding-proofs').remove([uploadedPath]);
       setMessage(error instanceof Error ? error.message : 'Funding submission failed.');
     } finally { setSubmitting(false); }
   }

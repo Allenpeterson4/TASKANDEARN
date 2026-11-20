@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { CalendarClock, Loader2, Save } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type PayoutSettings = {
   minimum_amount: number;
@@ -19,7 +19,7 @@ export default function AdminPayoutSettingsPanel() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    supabase.from('payout_settings').select('minimum_amount, enabled').eq('singleton', true).maybeSingle().then(({ data, error }) => {
+    mysqlApi.from('payout_settings').select('minimum_amount, enabled').eq('singleton', true).maybeSingle().then(({ data, error }) => {
       if (error) setMessage(error.message);
       if (data) {
         setSettings({
@@ -34,10 +34,10 @@ export default function AdminPayoutSettingsPanel() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from('payout_settings').update({
+    const { error } = await mysqlApi.from('payout_settings').update({
       ...settings,
       updated_at: new Date().toISOString(),
-      updated_by: (await supabase.auth.getUser()).data.user?.id,
+      updated_by: (await mysqlApi.auth.getCurrentUser())?.id,
     }).eq('singleton', true);
     setSaving(false);
     setMessage(error ? error.message : 'Payout settings saved. Requests can be queued before the processing window.');

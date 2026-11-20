@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Crown, Loader2, Trophy } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Category = 'earnings' | 'hustles' | 'referrals';
 type Entry = { position: number; user_id: string | null; display_name: string; avatar_url: string | null; score: number };
@@ -23,8 +23,8 @@ export default function LeaderboardPanel({ userId }: { userId: string }) {
       setLoading(true);
       setError('');
       const [{ data, error: listError }, { data: score, error: scoreError }] = await Promise.all([
-        supabase.rpc('get_leaderboard', { p_category: category }),
-        supabase.rpc('get_hustle_score', { p_user_id: userId }),
+        mysqlApi.rpc('get_leaderboard', { p_category: category }),
+        mysqlApi.rpc('get_hustle_score', { p_user_id: userId }),
       ]);
       if (!active) return;
       if (listError || scoreError) setError(listError?.message ?? scoreError?.message ?? 'Could not load leaderboard.');

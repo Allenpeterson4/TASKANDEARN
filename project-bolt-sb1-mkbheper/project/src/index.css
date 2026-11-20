@@ -253,7 +253,7 @@
 }
 
 :root[data-theme='light'] .hustler-wallet-card .hustler-wallet-logo {
-  opacity: 0.24 !important;
+  opacity: 1 !important;
 }
 
 :root:not([data-theme='light']) .hustler-wallet-card .hustler-wallet-logo {

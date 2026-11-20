@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { BadgeCheck, Banknote, Radio } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type PublicPayout = {
   member_label: string;
@@ -13,11 +13,10 @@ export default function PayoutTicker() {
   const [payouts, setPayouts] = useState<PublicPayout[]>([]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
     let active = true;
 
     async function refresh() {
-      const { data } = await supabase.rpc('get_public_payout_feed');
+      const { data } = await mysqlApi.rpc('get_public_payout_feed');
       if (active && data) setPayouts(data as PublicPayout[]);
     }
 

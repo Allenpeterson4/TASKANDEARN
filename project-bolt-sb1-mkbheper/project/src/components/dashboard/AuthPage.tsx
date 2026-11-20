@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Mail, Lock, User, Phone, ArrowLeft, ArrowRight, Loader2 } from 'lucide-react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/mysqlApi';
 import ThemeToggle from '@/components/ThemeToggle';
 import BrandLogo from '@/components/BrandLogo';
 
@@ -41,52 +41,29 @@ export default function AuthPage({ initialMode = 'login', onBack, adminOnly = fa
     setError('');
     setInfo('');
     if (mode === 'signup' && signupCooldown > 0) return;
-    if (!isSupabaseConfigured) {
-      setError('Authentication is not configured. Add the Supabase URL and anon key to the project environment.');
-      return;
-    }
     setLoading(true);
     if (mode === 'signup') setSignupCooldown(8);
 
     try {
       if (mode === 'reset') {
-        const { error: err } = await supabase.auth.updateUser({ password: form.password });
-        if (err) throw err;
+        const token = new URLSearchParams(window.location.search).get('reset-password') ?? '';
+        await mysqlApi.auth.resetPassword(token, form.password);
         setInfo('Password updated. You can now sign in.');
         setMode('login');
         setForm(current => ({ ...current, password: '' }));
       } else if (mode === 'signup') {
-        const { data, error: err } = await supabase.auth.signUp({
+        const result = await mysqlApi.auth.signUp({
           email: form.email,
           password: form.password,
-          options: { data: { full_name: form.fullName, phone: form.phone, referral_code: form.referralCode } },
+          fullName: form.fullName,
+          phone: form.phone,
+          referralCode: form.referralCode,
         });
-        if (err) throw err;
-        if (data.user) {
-          // create profile + balance rows
-          const code = Math.random().toString(36).substring(2, 8).toUpperCase();
-          await supabase.from('profiles').insert({
-            user_id: data.user.id,
-            full_name: form.fullName,
-            username: form.email.split('@')[0],
-            phone: form.phone,
-            tier: 'Bronze',
-            referral_code: code,
-          });
-          await supabase.from('balances').insert({
-            user_id: data.user.id,
-            reward_balance: 0,
-            referral_balance: 0,
-            total_earned: 0,
-          });
-        }
-        setInfo('Signup request received. Check your email for a confirmation link before signing in.');
+        setInfo(result.verification_required === false
+          ? 'Your account is ready. You can sign in now.'
+          : 'If this email can be registered, a confirmation link will be sent to your inbox.');
       } else {
-        const { error: err } = await supabase.auth.signInWithPassword({
-          email: form.email,
-          password: form.password,
-        });
-        if (err) throw err;
+        await mysqlApi.auth.signIn(form.email, form.password);
       }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Something went wrong';
@@ -109,20 +86,15 @@ export default function AuthPage({ initialMode = 'login', onBack, adminOnly = fa
       setError('Enter your email address first.');
       return;
     }
-    if (!isSupabaseConfigured) {
-      setError('Authentication is not configured. Add the Supabase URL and anon key to the project environment.');
-      return;
-    }
     setLoading(true);
-    const { error: resetError } = await supabase.auth.resetPasswordForEmail(form.email, {
-      redirectTo: `${window.location.origin}/?reset-password=1`,
-    });
-    setLoading(false);
-    if (resetError) {
-      setError(resetError.message);
-      return;
+    try {
+      await mysqlApi.auth.requestPasswordReset(form.email);
+      setInfo('If an account exists for this email, a password reset link is on its way.');
+    } catch (resetError) {
+      setError(resetError instanceof Error ? resetError.message : 'Could not send the password reset email.');
+    } finally {
+      setLoading(false);
     }
-    setInfo('If an account exists for this email, a password reset link is on its way.');
   }
 
   return (

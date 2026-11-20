@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Activity, Loader2, Search } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type AdminEvent = {
   id: string;
@@ -37,8 +37,8 @@ export default function AdminActivityPanel() {
       setLoading(true);
       setError('');
       const [adminResult, loginResult] = await Promise.all([
-        supabase.from('admin_activity_log').select('*').order('created_at', { ascending: false }).limit(200),
-        supabase.from('user_login_history').select('*').order('created_at', { ascending: false }).limit(200),
+        mysqlApi.from('admin_activity_log').select('*').order('created_at', { ascending: false }).limit(200),
+        mysqlApi.from('user_login_history').select('*').order('created_at', { ascending: false }).limit(200),
       ]);
 
       const requestError = adminResult.error ?? loginResult.error;
@@ -55,7 +55,7 @@ export default function AdminActivityPanel() {
         ...loginRows.map(event => event.user_id),
       ])];
       const profileResult = userIds.length
-        ? await supabase.from('profiles').select('user_id, full_name, username').in('user_id', userIds)
+        ? await mysqlApi.from('profiles').select('user_id, full_name, username').in('user_id', userIds)
         : { data: [], error: null };
       if (profileResult.error) {
         if (active) setError(profileResult.error.message);

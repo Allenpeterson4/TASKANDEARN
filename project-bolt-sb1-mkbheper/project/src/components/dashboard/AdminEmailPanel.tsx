@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Mail, Play, Save, Send } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type SmtpSettings = {
   enabled: boolean;
@@ -38,6 +38,7 @@ export default function AdminEmailPanel() {
   const [passwordConfigured, setPasswordConfigured] = useState(false);
   const [templates, setTemplates] = useState<EmailTemplate[]>([]);
   const [selectedKey, setSelectedKey] = useState('');
+  const [fallbackConfigured, setFallbackConfigured] = useState(false);
   const [queueStats, setQueueStats] = useState({ pending: 0, failed: 0, sent: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,12 +49,13 @@ export default function AdminEmailPanel() {
   async function load() {
     setLoading(true);
     const [settingsResult, templatesResult, queueResult] = await Promise.all([
-      supabase.functions.invoke('admin-email', { body: { action: 'get_settings' } }),
-      supabase.from('email_notification_templates').select('*').order('title'),
-      supabase.rpc('admin_email_queue_stats'),
+      mysqlApi.functions.invoke('admin-email', { body: { action: 'get_settings' } }),
+      mysqlApi.from('email_notification_templates').select('*').order('title'),
+      mysqlApi.rpc('admin_email_queue_stats'),
     ]);
     const errors = [settingsResult.error, templatesResult.error, queueResult.error].filter(Boolean);
     if (errors.length) setMessage(errors[0]?.message ?? 'Could not load email settings.');
+    setFallbackConfigured(Boolean(settingsResult.data?.fallback_configured));
     if (settingsResult.data?.settings) {
       const { password_configured, ...safeSettings } = settingsResult.data.settings;
       const loadedSettings = { ...defaults, ...safeSettings };
@@ -79,7 +81,7 @@ export default function AdminEmailPanel() {
     event.preventDefault();
     setSaving(true);
     setMessage('');
-    const { data, error } = await supabase.functions.invoke('admin-email', { body: { action: 'save_settings', settings, password } });
+    const { data, error } = await mysqlApi.functions.invoke('admin-email', { body: { action: 'save_settings', settings, password } });
     setSaving(false);
     if (error || data?.error) {
       setMessage(data?.error ?? error?.message ?? 'Could not save SMTP settings.');
@@ -87,13 +89,14 @@ export default function AdminEmailPanel() {
     }
     setPassword('');
     setPasswordConfigured(Boolean(data?.password_configured));
+    setFallbackConfigured(false);
     setMessage('SMTP settings saved securely.');
   }
 
   async function testSmtp() {
     setTesting(true);
     setMessage('');
-    const { data, error } = await supabase.functions.invoke('admin-email', { body: { action: 'test' } });
+    const { data, error } = await mysqlApi.functions.invoke('admin-email', { body: { action: 'test' } });
     setTesting(false);
     setMessage(error ? await getEdgeFunctionErrorMessage(error) : data?.error ?? `Test email sent to ${data?.recipient ?? 'your admin account'}.`);
   }
@@ -102,7 +105,7 @@ export default function AdminEmailPanel() {
     event.preventDefault();
     if (!selectedTemplate) return;
     setSaving(true);
-    const { error } = await supabase.from('email_notification_templates').update({
+    const { error } = await mysqlApi.from('email_notification_templates').update({
       title: selectedTemplate.title,
       subject_template: selectedTemplate.subject_template,
       body_template: selectedTemplate.body_template,
@@ -116,7 +119,7 @@ export default function AdminEmailPanel() {
   async function processQueue() {
     setProcessing(true);
     setMessage('');
-    const { data, error } = await supabase.functions.invoke('admin-email', { body: { action: 'process_queue' } });
+    const { data, error } = await mysqlApi.functions.invoke('admin-email', { body: { action: 'process_queue' } });
     setProcessing(false);
     if (error || data?.error) {
       setMessage(data?.error ?? error?.message ?? 'Could not process the email queue.');
@@ -130,11 +133,11 @@ export default function AdminEmailPanel() {
 
   return (
     <div className="space-y-7">
-      <header className="flex items-start gap-3 border-b border-white/10 pb-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center bg-amber-400/10 text-amber-300"><Mail size={18} /></div><div><h2 className="text-lg font-bold">Email notifications</h2><p className="mt-1 text-xs text-gray-400">SMTP credentials are encrypted server-side. The password is never returned to the browser or stored in plaintext.</p></div></header>
+      <header className="flex items-start gap-3 border-b border-white/10 pb-4"><div className="flex h-10 w-10 shrink-0 items-center justify-center bg-amber-400/10 text-amber-300"><Mail size={18} /></div><div><h2 className="text-lg font-bold">Email notifications</h2><p className="mt-1 text-xs text-gray-400">SMTP sends account confirmations, password resets, and platform notifications. Credentials are encrypted server-side and never returned to the browser or stored in plaintext.</p></div></header>
       {message && <p role="status" className="border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-300">{message}</p>}
 
       <form onSubmit={saveSmtp} className="space-y-4 border-b border-white/10 pb-6">
-        <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">SMTP connection</h3><label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings(current => ({ ...current, enabled: event.target.checked }))} className="accent-amber-400" />Enable queued email</label></div>
+        <div className="flex items-center justify-between gap-3"><h3 className="text-sm font-bold">SMTP connection</h3><label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={settings.enabled} onChange={event => setSettings(current => ({ ...current, enabled: event.target.checked }))} className="accent-amber-400" />Enable email delivery</label></div>
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           <label className="text-xs text-gray-400">SMTP host<input required value={settings.host} onChange={event => setSettings(current => ({ ...current, host: event.target.value }))} placeholder="smtp.example.com" className="admin-input mt-1" /></label>
           <label className="text-xs text-gray-400">Port<input required type="number" min="1" max="65535" value={settings.port} onChange={event => { const port = Number(event.target.value); setSettings(current => ({ ...current, port, secure: port === 465 || current.secure })); }} className="admin-input mt-1" /></label>
@@ -144,10 +147,11 @@ export default function AdminEmailPanel() {
           <label className="text-xs text-gray-400">SMTP password<input type="password" autoComplete="new-password" value={password} onChange={event => setPassword(event.target.value)} placeholder={passwordConfigured ? 'Saved securely; leave blank to keep' : 'Enter SMTP password'} className="admin-input mt-1" /></label>
         </div>
         <label className="flex items-center gap-2 text-xs text-gray-300"><input type="checkbox" checked={settings.secure} onChange={event => setSettings(current => ({ ...current, secure: event.target.checked }))} className="accent-amber-400" />Use implicit TLS (typically port 465)</label>
-        <div className="flex flex-wrap gap-2"><button disabled={saving} className="inline-flex items-center gap-2 bg-amber-400 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Save SMTP settings</button><button type="button" disabled={testing || !passwordConfigured} onClick={() => void testSmtp()} className="inline-flex items-center gap-2 border border-white/10 px-4 py-2.5 text-sm text-gray-300 disabled:opacity-40">{testing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send test email</button></div>
+        <div className="flex flex-wrap gap-2"><button disabled={saving} className="inline-flex items-center gap-2 bg-amber-400 px-4 py-2.5 text-sm font-bold text-black disabled:opacity-50">{saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}Save SMTP settings</button><button type="button" disabled={testing || !settings.enabled || (Boolean(settings.username) && !passwordConfigured)} onClick={() => void testSmtp()} className="inline-flex items-center gap-2 border border-white/10 px-4 py-2.5 text-sm text-gray-300 disabled:opacity-40">{testing ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}Send test email</button></div>
+        {fallbackConfigured && <p className="text-xs text-gray-500">A private SMTP fallback is configured, but the Admin email toggle must be enabled before any mail is sent.</p>}
       </form>
 
-      <section className="space-y-3 border-b border-white/10 pb-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Notification queue</h3><p className="mt-1 text-xs text-gray-500">{queueStats.pending} pending · {queueStats.failed} failed · {queueStats.sent} sent</p></div><button type="button" disabled={processing || !settings.enabled} onClick={() => void processQueue()} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-xs text-gray-300 disabled:opacity-40">{processing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}Process pending notifications</button></div><p className="text-[11px] text-gray-500">Database events queue email automatically. Use this button for manual delivery, or configure a trusted scheduler with the EMAIL_QUEUE_SECRET header for unattended delivery.</p></section>
+      <section className="space-y-3 border-b border-white/10 pb-6"><div className="flex flex-wrap items-center justify-between gap-3"><div><h3 className="text-sm font-bold">Notification queue</h3><p className="mt-1 text-xs text-gray-500">{queueStats.pending} pending · {queueStats.failed} failed · {queueStats.sent} sent</p></div><button type="button" disabled={processing || !settings.enabled} onClick={() => void processQueue()} className="inline-flex items-center gap-2 border border-white/10 px-3 py-2 text-xs text-gray-300 disabled:opacity-40">{processing ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}Process pending notifications</button></div><p className="text-[11px] text-gray-500">Database events queue email automatically. Use this button for manual delivery, or configure a trusted scheduler with the X-Email-Queue-Secret header for unattended delivery.</p></section>
 
       <section className="grid gap-5 lg:grid-cols-[minmax(220px,.7fr)_minmax(0,1.3fr)]">
         <div className="divide-y divide-white/8 border-y border-white/8">{templates.map(template => <button key={template.event_key} type="button" onClick={() => setSelectedKey(template.event_key)} className={`w-full py-3 text-left ${selectedKey === template.event_key ? 'text-amber-300' : 'text-gray-300'}`}><span className="block text-xs font-semibold">{template.title}</span><span className="mt-1 block text-[10px] text-gray-500">{template.enabled ? 'Enabled' : 'Disabled'}</span></button>)}</div>

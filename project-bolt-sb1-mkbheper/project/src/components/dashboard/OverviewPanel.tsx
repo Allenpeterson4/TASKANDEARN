@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Zap, Clock, ArrowUpRight, ChevronRight, X, BarChart3 } from 'lucide-react';
+import { Zap, Clock, ArrowUpRight, ChevronRight, X, BarChart3, WalletCards } from 'lucide-react';
 import BrandLogo from '@/components/BrandLogo';
-import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/supabase';
+import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/platformTypes';
 import DailyCheckinCard from './DailyCheckinCard';
 import WithdrawalProgressCard from './WithdrawalProgressCard';
 
@@ -35,7 +35,7 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
   });
   const claimedTaskIds = new Set(completions.filter(completion => completion.status !== 'rejected').map(completion => completion.task_id));
   const availableTaskCount = tasks.filter(task => !claimedTaskIds.has(task.id)).length;
-  const availableBalance = (balance?.reward_balance ?? 0) + (balance?.referral_balance ?? 0);
+  const hustleBalance = balance?.reward_balance ?? 0;
   const hour = new Date().getHours();
   const timeGreeting = hour < 12 ? 'Good morning' : hour < 17 ? 'Good afternoon' : 'Good evening';
   const firstName = profile?.full_name?.split(' ')[0] || profile?.username || 'Hustler';
@@ -69,24 +69,21 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
         </div>
       </section>
 
-      <section className="hustler-wallet-card relative isolate overflow-hidden rounded-2xl border border-amber-300/60 bg-gradient-to-br from-[#21190c] via-[#17140f] to-[#10100f] p-4 shadow-[0_0_24px_-8px_rgba(249,115,22,0.7)] sm:p-6" aria-label="Hustler wallet balance">
-        <BrandLogo
-          className="hustler-wallet-logo pointer-events-none absolute right-3 top-2 z-0 flex h-16 w-16 items-center justify-center opacity-100 sm:right-6 sm:top-3 sm:h-28 sm:w-28"
-          markClassName="h-full w-full"
-          showWordmark={false}
-          showFallback={false}
-        />
-        <div className="relative z-10 grid min-h-36 grid-cols-[minmax(0,1fr)_auto] grid-rows-[1fr_auto] items-end gap-x-2 gap-y-3 sm:min-h-48 sm:grid-cols-[minmax(0,1fr)_150px] sm:gap-x-5">
-          <div className="col-start-1 row-span-2 min-w-0 pb-1">
-            <p className="hustler-wallet-title text-xs font-bold uppercase tracking-[0.12em] text-amber-300">Hustler wallet</p>
-            <p className="mt-2 text-2xl font-black leading-none text-white sm:text-5xl">₦{availableBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
-            <p className="mt-3 flex flex-wrap gap-x-3 gap-y-1.5 text-[10px] text-gray-300/80 sm:mt-4 sm:text-xs">
-              <span>Hustles <span className="font-semibold text-white/90">₦{(balance?.reward_balance ?? 0).toLocaleString('en-NG')}</span></span>
-              <span>Referrals <span className="font-semibold text-white/90">₦{(balance?.referral_balance ?? 0).toLocaleString('en-NG')}</span></span>
-              <span>Lifetime <span className="font-semibold text-white/90">₦{(balance?.total_earned ?? 0).toLocaleString('en-NG')}</span></span>
+      <section className="hustler-wallet-card relative isolate overflow-hidden rounded-2xl border border-amber-300/60 bg-gradient-to-br from-[#21190c] via-[#17140f] to-[#10100f] p-4 shadow-[0_0_24px_-8px_rgba(249,115,22,0.7)] sm:p-5" aria-label="Hustler wallet balance">
+        <div className="relative z-10 grid min-h-52 grid-cols-1 items-center gap-5 py-3 text-center sm:min-h-56 sm:grid-cols-[minmax(0,1fr)_minmax(140px,.8fr)_auto] sm:gap-4 sm:py-2 sm:text-left">
+          <div>
+            <p className="hustler-wallet-title flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-300 sm:justify-start sm:text-sm">
+              <WalletCards size={21} strokeWidth={2.5} />
+              Hustler wallet
             </p>
+            <p className="mt-2 text-4xl font-black leading-none tracking-tight text-white sm:text-5xl xl:text-6xl">₦{hustleBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
           </div>
-          <button onClick={() => onNavigate('wallet')} className="col-start-2 row-start-2 inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/40 bg-amber-400 px-3 py-2.5 text-xs font-bold text-[#21190c] transition-colors hover:bg-amber-300 sm:px-5 sm:py-3 sm:text-sm">
+          <BrandLogo
+            className="hustler-wallet-logo mx-auto flex h-32 w-32 items-center justify-center sm:h-40 sm:w-40 xl:h-48 xl:w-48"
+            showWordmark={false}
+            showFallback={false}
+          />
+          <button onClick={() => onNavigate('wallet')} className="mx-auto inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/40 bg-amber-400 px-4 py-2.5 text-xs font-bold text-[#21190c] transition-colors hover:bg-amber-300 sm:mx-0 sm:px-5 sm:py-3 sm:text-sm">
             Open wallet <ArrowUpRight size={16} />
           </button>
         </div>

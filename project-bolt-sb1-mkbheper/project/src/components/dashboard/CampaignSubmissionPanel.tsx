@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Loader2, Plus, Send } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Submission = { id: string; title: string; budget: number; status: string; review_note: string | null; created_at: string };
 const initialForm = { title: '', description: '', category: 'General', reward: '', quantity: '1', taskUrl: '', proofInstructions: 'Describe the action completed and attach evidence.' };
@@ -16,8 +16,8 @@ export default function CampaignSubmissionPanel({ userId }: { userId: string }) 
 
   const load = useCallback(async () => {
     const [{ data: balance }, { data: rows }] = await Promise.all([
-      supabase.from('balances').select('fund_balance').eq('user_id', userId).maybeSingle(),
-      supabase.from('campaign_submissions').select('id, title, budget, status, review_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
+      mysqlApi.from('balances').select('fund_balance').eq('user_id', userId).maybeSingle(),
+      mysqlApi.from('campaign_submissions').select('id, title, budget, status, review_note, created_at').eq('user_id', userId).order('created_at', { ascending: false }).limit(10),
     ]);
     setFundBalance(Number(balance?.fund_balance ?? 0));
     setSubmissions((rows ?? []) as Submission[]);
@@ -30,7 +30,7 @@ export default function CampaignSubmissionPanel({ userId }: { userId: string }) 
     event.preventDefault();
     setSubmitting(true);
     setMessage('');
-    const { error } = await supabase.rpc('submit_campaign', {
+    const { error } = await mysqlApi.rpc('submit_campaign', {
       p_title: form.title,
       p_description: form.description,
       p_category: form.category,

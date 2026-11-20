@@ -1,7 +1,7 @@
 import { ArrowRight, ChevronDown, Star, Users, Zap, Shield } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { useSiteContent } from '@/hooks/useSiteContent';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const stats = [
   { value: '50K+', label: 'Active Earners' },
@@ -18,7 +18,7 @@ export default function Hero() {
   const heroImageUrl = heroImagePath
     ? /^https?:\/\//i.test(heroImagePath)
       ? heroImagePath
-      : supabase.storage.from('site-media').getPublicUrl(heroImagePath).data.publicUrl
+      : mysqlApi.storage.from('site-media').getPublicUrl(heroImagePath).data.publicUrl
     : fallbackHeroImageUrl;
 
   return (

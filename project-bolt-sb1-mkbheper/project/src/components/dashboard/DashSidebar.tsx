@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import BrandLogo from '@/components/BrandLogo';
+import { mysqlApi } from '@/lib/platformTypes';
+import { useSiteContent } from '@/hooks/useSiteContent';
 
 export type DashTab =
   | 'overview'
@@ -61,6 +63,11 @@ const tierColors: Record<string, string> = {
 export default function DashSidebar({
   active, onChange, fullName, avatarUrl, tier, onLogout, taskCount, showPlans, featureAccess, sideOpen, setSideOpen,
 }: Props) {
+  const leaderboardContent = useSiteContent(['branding.leaderboard_icon']);
+  const leaderboardIconPath = leaderboardContent['branding.leaderboard_icon'] ?? '';
+  const leaderboardIconUrl = leaderboardIconPath && !/^https?:\/\//i.test(leaderboardIconPath)
+    ? mysqlApi.storage.from('site-media').getPublicUrl(leaderboardIconPath).data.publicUrl
+    : '';
   const initials = fullName
     ? fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'MH';
@@ -132,7 +139,13 @@ export default function DashSidebar({
                         : 'text-gray-400 hover:text-white hover:bg-white/5'
                     }`}
                   >
-                    <Icon size={17} className={isActive ? 'text-amber-400' : ''} />
+                    {item.id === 'leaderboard' ? (
+                      <span className={`-ml-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${isActive ? 'border-amber-300/30 bg-gradient-to-br from-amber-300/20 to-orange-500/10 text-amber-300' : 'border-white/10 bg-white/5 text-gray-300'}`}>
+                        {leaderboardIconUrl
+                          ? <img src={leaderboardIconUrl} alt="" className="h-full w-full object-contain p-1" />
+                          : <Icon size={16} />}
+                      </span>
+                    ) : <Icon size={17} className={isActive ? 'text-amber-400' : ''} />}
                     {item.label}
                     {item.id === 'tasks' && taskCount > 0 && (
                       <span className="ml-auto bg-amber-400 text-black text-[10px] font-black px-1.5 py-0.5 rounded-full">

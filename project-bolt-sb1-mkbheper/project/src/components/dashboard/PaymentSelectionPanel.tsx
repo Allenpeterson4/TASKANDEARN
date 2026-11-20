@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ArrowLeft, Banknote, CheckCircle, Copy, CreditCard, Loader2, ShieldCheck, WalletCards } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Plan = {
   plan_code: string;
@@ -30,9 +30,9 @@ export default function PaymentSelectionPanel({ planCode, onBack }: { planCode: 
   const loadPlan = useCallback(async () => {
     setLoading(true);
     const [planResult, taskResult, fundingResult] = await Promise.all([
-      supabase.from('subscription_plans').select('plan_code, name, description, price, daily_task_limit, daily_earning_cap, max_withdrawal, billing_period, referral_commission_percent').eq('plan_code', planCode).eq('is_active', true).maybeSingle(),
-      supabase.from('tasks').select('id', { count: 'exact', head: true }).eq('is_active', true),
-      supabase.from('funding_settings').select('enabled, bank_name, account_name, account_number, instructions').eq('singleton', true).maybeSingle(),
+      mysqlApi.from('subscription_plans').select('plan_code, name, description, price, daily_task_limit, daily_earning_cap, max_withdrawal, billing_period, referral_commission_percent').eq('plan_code', planCode).eq('is_active', true).maybeSingle(),
+      mysqlApi.from('tasks').select('id', { count: 'exact', head: true }).eq('is_active', true),
+      mysqlApi.from('funding_settings').select('enabled, bank_name, account_name, account_number, instructions').eq('singleton', true).maybeSingle(),
     ]);
     if (planResult.error || taskResult.error || fundingResult.error || !planResult.data) setMessage(planResult.error?.message ?? taskResult.error?.message ?? fundingResult.error?.message ?? 'This plan is no longer available.');
     setPlan((planResult.data as Plan | null) ?? null);
@@ -48,14 +48,23 @@ export default function PaymentSelectionPanel({ planCode, onBack }: { planCode: 
     setSubmitting(true);
     setMessage('');
     const result = method === 'manual'
-      ? await supabase.rpc('submit_manual_plan_payment', { p_plan_code: plan.plan_code, p_payment_proof: manualProof })
-      : await supabase.rpc('submit_gateway_plan_payment', { p_plan_code: plan.plan_code, p_provider: method });
+      ? await mysqlApi.rpc('submit_manual_plan_payment', { p_plan_code: plan.plan_code, p_payment_proof: manualProof })
+      : await mysqlApi.rpc('submit_gateway_plan_payment', { p_plan_code: plan.plan_code, p_provider: method });
     setSubmitting(false);
     if (result.error) {
       setMessage(result.error.message);
       return;
     }
-    setMessage(method === 'manual' ? 'Payment proof submitted for admin approval.' : `${method === 'paystack' ? 'Paystack' : 'Flutterwave'} payment initialized. Your plan activates automatically after provider confirmation.`);
+    if (method !== 'manual') {
+      const checkoutUrl = (result.data as { checkout_url?: unknown } | null)?.checkout_url;
+      if (typeof checkoutUrl !== 'string' || !/^https:\/\//i.test(checkoutUrl)) {
+        setMessage('The payment provider did not return a valid checkout link.');
+        return;
+      }
+      window.location.assign(checkoutUrl);
+      return;
+    }
+    setMessage('Payment proof submitted for admin approval.');
     setManualProof('');
   }
 

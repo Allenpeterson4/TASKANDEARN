@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ThemeContext } from '@/hooks/themeContext';
 import { defaultThemeColors, type Theme, type ThemeColors } from '@/hooks/themeContext';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 function readCachedColors(): ThemeColors {
   try {
@@ -11,6 +11,32 @@ function readCachedColors(): ThemeColors {
   } catch {
     return defaultThemeColors;
   }
+}
+
+function updateBrandMeta(path: string | undefined) {
+  if (!path) return;
+  const imageUrl = /^https?:\/\//i.test(path)
+    ? path
+    : mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl;
+  for (const [selector, attribute, value] of [
+    ['meta[property="og:image"]', 'property', 'og:image'],
+    ['meta[name="twitter:image"]', 'name', 'twitter:image'],
+  ]) {
+    let meta = document.querySelector<HTMLMetaElement>(selector);
+    if (!meta) {
+      meta = document.createElement('meta');
+      meta.setAttribute(attribute, value);
+      document.head.append(meta);
+    }
+    meta.content = imageUrl;
+  }
+  let card = document.querySelector<HTMLMetaElement>('meta[name="twitter:card"]');
+  if (!card) {
+    card = document.createElement('meta');
+    card.name = 'twitter:card';
+    document.head.append(card);
+  }
+  card.content = 'summary_large_image';
 }
 
 export default function ThemeProvider({ children }: { children: ReactNode }) {
@@ -58,32 +84,47 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
   }, [colors]);
 
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
     let active = true;
-    supabase.from('site_content').select('content_key, body').in('content_key', ['theme.colors', 'branding.favicon'])
-      .then(({ data }) => {
-        if (!active || !data) return;
-        const content = Object.fromEntries(data.map(entry => [entry.content_key, entry.body]));
-        if (content['theme.colors']) {
-          try {
-            setColors({ ...defaultThemeColors, ...JSON.parse(content['theme.colors']) });
-          } catch {
-            // Ignore invalid palette data and retain the last cached colors.
+    const refreshBranding = () => {
+      void mysqlApi.from('site_content').select('content_key, body').in('content_key', ['theme.colors', 'branding.favicon', 'branding.site_logo', 'branding.logo'])
+        .then(({ data }) => {
+          if (!active || !data) return;
+          const content = Object.fromEntries(data.map((entry: { content_key: string; body: string }) => [entry.content_key, entry.body]));
+          if (content['theme.colors']) {
+            try {
+              setColors({ ...defaultThemeColors, ...JSON.parse(content['theme.colors']) });
+            } catch {
+              // Ignore invalid palette data and retain the last cached colors.
+            }
           }
-        }
-        const faviconPath = content['branding.favicon'];
-        if (faviconPath && !/^https?:\/\//i.test(faviconPath)) {
-          let icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
-          if (!icon) {
-            icon = document.createElement('link');
-            icon.rel = 'icon';
-            document.head.append(icon);
+          const faviconPath = content['branding.favicon'];
+          if (faviconPath && !/^https?:\/\//i.test(faviconPath)) {
+            let icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
+            if (!icon) {
+              icon = document.createElement('link');
+              icon.rel = 'icon';
+              document.head.append(icon);
+            }
+            icon.href = mysqlApi.storage.from('site-media').getPublicUrl(faviconPath).data.publicUrl;
+            icon.type = faviconPath.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
           }
-          icon.href = supabase.storage.from('site-media').getPublicUrl(faviconPath).data.publicUrl;
-          icon.type = faviconPath.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
-        }
-      });
-    return () => { active = false; };
+          updateBrandMeta(content['branding.site_logo'] || content['branding.logo']);
+        });
+    };
+    const handleSiteContentUpdate = (event: Event) => {
+      const { key, body } = (event as CustomEvent<{ key: string; body: string }>).detail;
+      if (key === 'branding.site_logo' || key === 'branding.logo') updateBrandMeta(body);
+    };
+    refreshBranding();
+    const timer = window.setInterval(refreshBranding, 30000);
+    window.addEventListener('focus', refreshBranding);
+    window.addEventListener('site-content-updated', handleSiteContentUpdate);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+      window.removeEventListener('focus', refreshBranding);
+      window.removeEventListener('site-content-updated', handleSiteContentUpdate);
+    };
   }, []);
 
   function toggleTheme() {

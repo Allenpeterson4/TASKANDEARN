@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, ExternalLink, Loader2, Save, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Settings = { enabled: boolean; bank_name: string; account_name: string; account_number: string; instructions: string };
 type Deposit = { id: string; user_id: string; amount: number; payment_method: string; provider_reference: string | null; proof_text: string | null; proof_path: string | null; status: string; created_at: string };
@@ -16,8 +16,8 @@ export default function AdminFundingPanel() {
   async function load() {
     setLoading(true);
     const [settingsResult, depositsResult] = await Promise.all([
-      supabase.from('funding_settings').select('*').eq('singleton', true).maybeSingle(),
-      supabase.from('funding_deposits').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
+      mysqlApi.from('funding_settings').select('*').eq('singleton', true).maybeSingle(),
+      mysqlApi.from('funding_deposits').select('*').eq('status', 'pending').order('created_at', { ascending: false }),
     ]);
     if (settingsResult.error || depositsResult.error) setMessage((settingsResult.error ?? depositsResult.error)?.message ?? 'Could not load funding settings.');
     if (settingsResult.data) setSettings(settingsResult.data as Settings);
@@ -30,20 +30,21 @@ export default function AdminFundingPanel() {
   async function save(event: React.FormEvent) {
     event.preventDefault();
     setSaving(true);
-    const { error } = await supabase.from('funding_settings').update({ ...settings, updated_at: new Date().toISOString(), updated_by: (await supabase.auth.getUser()).data.user?.id }).eq('singleton', true);
+    const { error } = await mysqlApi.from('funding_settings').update({ ...settings, updated_at: new Date().toISOString(), updated_by: (await mysqlApi.auth.getCurrentUser())?.id }).eq('singleton', true);
     setSaving(false);
     setMessage(error ? error.message : 'Funding settings saved.');
   }
 
   async function review(id: string, decision: 'confirm' | 'reject') {
-    const { error } = await supabase.rpc('admin_review_funding_deposit', { p_deposit_id: id, p_decision: decision, p_review_note: null });
+    const { error } = await mysqlApi.rpc('admin_review_funding_deposit', { p_deposit_id: id, p_decision: decision, p_review_note: null });
     if (error) setMessage(error.message);
     else { setMessage(decision === 'confirm' ? 'Deposit confirmed and wallet credited.' : 'Deposit rejected.'); await load(); }
   }
 
   async function openProof(path: string) {
-    const { data, error } = await supabase.storage.from('funding-proofs').createSignedUrl(path, 120);
-    if (error) setMessage(error.message); else window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
+    const { data, error } = await mysqlApi.storage.from('funding-proofs').createSignedUrl(path, 120);
+    if (error || !data) setMessage(error?.message ?? 'Could not create a secure proof link.');
+    else window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   }
 
   return <div className="space-y-8">

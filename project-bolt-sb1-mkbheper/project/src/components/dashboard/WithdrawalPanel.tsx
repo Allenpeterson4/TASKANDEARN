@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Clock, CheckCircle, XCircle, Loader2, AlertCircle } from 'lucide-react';
-import type { Balance, Withdrawal } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import { CreditCard, Clock, CheckCircle, XCircle, Loader2, AlertCircle, WalletCards } from 'lucide-react';
+import type { Balance, Withdrawal } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 
 interface Props {
   walletType: 'hustler' | 'referral';
@@ -35,9 +35,9 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
     let active = true;
     async function loadSettings() {
       const [{ data: payout }, { data: controls }, { data: subscription }] = await Promise.all([
-        supabase.from('payout_settings').select('minimum_amount, payout_days, window_start, window_end, timezone, enabled').eq('singleton', true).maybeSingle(),
-        supabase.from('platform_settings').select('hustler_withdrawals_enabled, referral_withdrawals_enabled, withdrawal_failure_message, hustler_payout_days, hustler_window_start, hustler_window_end, hustler_timezone, referral_payout_days, referral_window_start, referral_window_end, referral_timezone').eq('singleton', true).maybeSingle(),
-        supabase.from('user_subscriptions').select('plan_code').eq('user_id', balance?.user_id ?? '').eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
+        mysqlApi.from('payout_settings').select('minimum_amount, payout_days, window_start, window_end, timezone, enabled').eq('singleton', true).maybeSingle(),
+        mysqlApi.from('platform_settings').select('hustler_withdrawals_enabled, referral_withdrawals_enabled, withdrawal_failure_message, hustler_payout_days, hustler_window_start, hustler_window_end, hustler_timezone, referral_payout_days, referral_window_start, referral_window_end, referral_timezone').eq('singleton', true).maybeSingle(),
+        mysqlApi.from('user_subscriptions').select('plan_code').eq('user_id', balance?.user_id ?? '').eq('status', 'active').or(`ends_at.is.null,ends_at.gt.${new Date().toISOString()}`).order('starts_at', { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (!active) return;
       if (payout) {
@@ -56,7 +56,7 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
         }));
       }
       const planCode = subscription?.plan_code ?? 'free';
-      const { data: plan } = await supabase.from('subscription_plans').select('max_withdrawal').eq('plan_code', planCode).maybeSingle();
+      const { data: plan } = await mysqlApi.from('subscription_plans').select('max_withdrawal').eq('plan_code', planCode).maybeSingle();
       if (active && plan) setMaximumWithdrawal(Number(plan.max_withdrawal));
     }
     void loadSettings();
@@ -84,7 +84,7 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
 
     setLoading(true);
     try {
-      const { data, error: err } = await supabase.rpc('request_withdrawal', {
+      const { data, error: err } = await mysqlApi.rpc('request_withdrawal', {
         p_amount: amt,
         p_bank_name: form.bank,
         p_account_no: form.accountNo,
@@ -113,12 +113,20 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
   return (
     <div className="space-y-6">
       {/* Available balance */}
-      <div className="bg-gradient-to-r from-amber-400/8 to-orange-500/4 border border-amber-400/12 rounded-2xl p-5">
-        <p className="text-gray-400 text-xs mb-1">{walletLabel} balance</p>
-        <p className="text-white text-3xl font-black mb-1">
-          ₦{totalAvailable.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-        </p>
-        <p className="text-gray-500 text-xs">Maximum withdrawal ₦{maximumWithdrawal.toLocaleString()} per request</p>
+      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#171717] via-[#111] to-[#0d0d0d] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
+        <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-amber-300 to-orange-500" />
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-300">{walletLabel}</p>
+            <p className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
+              ₦{totalAvailable.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
+            </p>
+            <p className="mt-2 text-xs text-gray-400">Maximum withdrawal ₦{maximumWithdrawal.toLocaleString()} per request</p>
+          </div>
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/15 bg-amber-300/10 text-amber-300">
+            <WalletCards size={21} />
+          </div>
+        </div>
       </div>
 
       {/* Withdrawal form */}

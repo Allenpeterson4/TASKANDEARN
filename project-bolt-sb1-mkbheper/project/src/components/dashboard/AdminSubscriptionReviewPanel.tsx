@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Submission = {
   id: string;
@@ -20,7 +20,7 @@ export default function AdminSubscriptionReviewPanel() {
 
   async function load() {
     setLoading(true);
-    const { data, error } = await supabase.from('user_subscriptions').select('id, user_id, plan_code, amount, provider, payment_method, payment_proof, created_at').eq('status', 'pending').order('created_at', { ascending: false });
+    const { data, error } = await mysqlApi.from('user_subscriptions').select('id, user_id, plan_code, amount, provider, payment_method, payment_proof, created_at').eq('status', 'pending').order('created_at', { ascending: false });
     if (error) setMessage(error.message);
     setSubmissions((data ?? []) as Submission[]);
     setLoading(false);
@@ -29,7 +29,7 @@ export default function AdminSubscriptionReviewPanel() {
   useEffect(() => { void load(); }, []);
 
   async function review(id: string, decision: 'activate' | 'decline') {
-    const { error } = await supabase.rpc('admin_review_plan_subscription', { p_subscription_id: id, p_decision: decision });
+    const { error } = await mysqlApi.rpc('admin_review_plan_subscription', { p_subscription_id: id, p_decision: decision });
     if (error) {
       setMessage(error.message);
       return;

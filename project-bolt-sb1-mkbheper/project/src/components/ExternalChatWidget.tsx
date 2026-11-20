@@ -1,11 +1,10 @@
 import { useEffect } from 'react';
-import { isSupabaseConfigured, supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const WIDGET_KEY = 'support.live_chat.widget_code';
 
 export default function ExternalChatWidget() {
   useEffect(() => {
-    if (!isSupabaseConfigured) return;
     let active = true;
     const injectedNodes: Node[] = [];
 
@@ -31,7 +30,7 @@ export default function ExternalChatWidget() {
     }
 
     async function loadWidget() {
-      const { data } = await supabase.from('site_content').select('body').eq('content_key', WIDGET_KEY).maybeSingle();
+      const { data } = await mysqlApi.from('site_content').select('body').eq('content_key', WIDGET_KEY).maybeSingle();
       if (!active || !data?.body?.trim()) return;
       const parsed = document.createElement('template');
       parsed.innerHTML = data.body;

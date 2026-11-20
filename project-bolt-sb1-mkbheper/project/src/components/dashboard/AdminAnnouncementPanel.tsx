@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, Save } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type SocialLink = { label: string; url: string };
 type Announcement = { title: string; message: string; enabled: boolean; welcome_bonus: number; require_social: boolean; social_links: SocialLink[] };
@@ -14,7 +14,7 @@ export default function AdminAnnouncementPanel() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    supabase.from('platform_announcements').select('*').eq('singleton', true).maybeSingle().then(({ data, error }) => {
+    mysqlApi.from('platform_announcements').select('*').eq('singleton', true).maybeSingle().then(({ data, error }) => {
       if (error) setMessage(error.message);
       if (data) {
         const loaded = data as Announcement;
@@ -40,8 +40,8 @@ export default function AdminAnnouncementPanel() {
       return;
     }
     setSaving(true);
-    const { data: user } = await supabase.auth.getUser();
-    const { error } = await supabase.from('platform_announcements').upsert({ singleton: true, ...announcement, social_links: socialLinks, updated_by: user.user?.id, updated_at: new Date().toISOString() });
+    const user = await mysqlApi.auth.getCurrentUser();
+    const { error } = await mysqlApi.from('platform_announcements').upsert({ singleton: true, ...announcement, social_links: socialLinks, updated_by: user?.id, updated_at: new Date().toISOString() });
     setSaving(false);
     setMessage(error ? error.message : 'Announcement settings saved.');
   }

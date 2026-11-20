@@ -1,18 +1,19 @@
 import { useEffect, useState } from 'react';
 import { Image, Loader2, Trash2, Upload } from 'lucide-react';
 import { cacheSiteContent } from '@/hooks/useSiteContent';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 const logoSettings = [
   { key: 'branding.site_logo', title: 'Website logo', description: 'Upload a transparent PNG or SVG for the navigation, footer, sign-in screen, and dashboard.' },
   { key: 'branding.preloader_logo', title: 'Preloader logo', description: 'Upload a transparent PNG or SVG for the loading screen.' },
+  { key: 'branding.leaderboard_icon', title: 'Leaderboard navigation icon', description: 'Upload a square PNG or SVG to replace the fifth dashboard navigation icon.' },
   { key: 'branding.logo', title: 'Legacy site logo', description: 'Upload or remove the older site logo entry; the main site logo is preferred when both exist.' },
   { key: 'branding.favicon', title: 'Site favicon', description: 'Upload a PNG or SVG favicon image.' },
 ] as const;
 
 type LogoKey = typeof logoSettings[number]['key'];
 type LogoPaths = Record<LogoKey, string>;
-const emptyPaths: LogoPaths = { 'branding.site_logo': '', 'branding.preloader_logo': '', 'branding.logo': '', 'branding.favicon': '' };
+const emptyPaths: LogoPaths = { 'branding.site_logo': '', 'branding.preloader_logo': '', 'branding.leaderboard_icon': '', 'branding.logo': '', 'branding.favicon': '' };
 
 export default function AdminBrandingPanel() {
   const [paths, setPaths] = useState<LogoPaths>(emptyPaths);
@@ -21,12 +22,12 @@ export default function AdminBrandingPanel() {
   const [message, setMessage] = useState('');
 
   useEffect(() => {
-    supabase.from('site_content').select('content_key, body').in('content_key', logoSettings.map(setting => setting.key)).then(({ data, error }) => {
+    mysqlApi.from('site_content').select('content_key, body').in('content_key', logoSettings.map(setting => setting.key)).then(({ data, error }) => {
       if (error) setMessage(error.message);
       if (data) {
         setPaths(current => ({
           ...current,
-          ...Object.fromEntries(data.map(row => [row.content_key, row.body])),
+          ...Object.fromEntries(data.map((row: { content_key: LogoKey; body: string }) => [row.content_key, row.body])),
         }));
       }
       setLoading(false);
@@ -34,7 +35,7 @@ export default function AdminBrandingPanel() {
   }, []);
 
   function publicUrl(path: string) {
-    return path && !/^https?:\/\//i.test(path) ? supabase.storage.from('site-media').getPublicUrl(path).data.publicUrl : '';
+    return path && !/^https?:\/\//i.test(path) ? mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl : '';
   }
 
   async function uploadLogo(key: LogoKey, file?: File) {
@@ -46,9 +47,9 @@ export default function AdminBrandingPanel() {
     setUploading(key);
     setMessage('');
     const extension = file.name.split('.').pop()?.replace(/[^a-zA-Z0-9]/g, '') || 'image';
-    const imageType = key.includes('favicon') ? 'favicon' : key.endsWith('preloader_logo') ? 'preloader' : 'site';
+    const imageType = key.includes('favicon') ? 'favicon' : key.endsWith('preloader_logo') ? 'preloader' : key.endsWith('leaderboard_icon') ? 'leaderboard-icon' : 'site';
     const path = `branding/${imageType}-${crypto.randomUUID()}.${extension}`;
-    const { error: uploadError } = await supabase.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
+    const { error: uploadError } = await mysqlApi.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
     if (uploadError) {
       setUploading(null);
       setMessage(uploadError.message);
@@ -56,17 +57,17 @@ export default function AdminBrandingPanel() {
     }
 
     const title = logoSettings.find(setting => setting.key === key)?.title ?? key;
-    const { data: user } = await supabase.auth.getUser();
-    const { error: saveError } = await supabase.from('site_content').upsert({
+    const user = await mysqlApi.auth.getCurrentUser();
+    const { error: saveError } = await mysqlApi.from('site_content').upsert({
       content_key: key,
       title,
       body: path,
       updated_at: new Date().toISOString(),
-      updated_by: user.user?.id,
+      updated_by: user?.id,
     });
     setUploading(null);
     if (saveError) {
-      await supabase.storage.from('site-media').remove([path]);
+      await mysqlApi.storage.from('site-media').remove([path]);
       setMessage(saveError.message);
       return;
     }
@@ -74,13 +75,13 @@ export default function AdminBrandingPanel() {
     const previousPath = paths[key];
     cacheSiteContent(key, path);
     setPaths(current => ({ ...current, [key]: path }));
-    if (previousPath.startsWith('branding/')) await supabase.storage.from('site-media').remove([previousPath]);
+    if (previousPath.startsWith('branding/')) await mysqlApi.storage.from('site-media').remove([previousPath]);
     setMessage(`${title} uploaded and published.`);
   }
 
   async function removeLogo(key: LogoKey) {
     const previousPath = paths[key];
-    const { error } = await supabase.from('site_content').upsert({
+    const { error } = await mysqlApi.from('site_content').upsert({
       content_key: key,
       title: logoSettings.find(setting => setting.key === key)?.title ?? key,
       body: '',
@@ -92,7 +93,7 @@ export default function AdminBrandingPanel() {
     }
     cacheSiteContent(key, '');
     setPaths(current => ({ ...current, [key]: '' }));
-    if (previousPath.startsWith('branding/')) await supabase.storage.from('site-media').remove([previousPath]);
+    if (previousPath.startsWith('branding/')) await mysqlApi.storage.from('site-media').remove([previousPath]);
     setMessage('Uploaded image removed.');
   }
 

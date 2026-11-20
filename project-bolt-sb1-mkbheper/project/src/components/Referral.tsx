@@ -1,64 +1,16 @@
 import { Users, Copy, TrendingUp, Gift, ArrowRight, CheckCircle } from 'lucide-react';
 import { useSiteContent } from '@/hooks/useSiteContent';
-
-const referralStepKeys = [
-  'referrals.how_it_works.1',
-  'referrals.how_it_works.2',
-  'referrals.how_it_works.3',
-  'referrals.how_it_works.4',
-];
-
-const defaultSteps = [
-  'Copy and share your unique referral link via WhatsApp, social media, or anywhere.',
-  'Your friend signs up using your link and creates a verified account.',
-  'When they complete their first hustle, you receive the configured referral bonus.',
-  'You continue earning referral rewards as your invite completes hustles.',
-];
-
-const tiers = [
-  {
-    level: 'Bronze',
-    refs: '1–4 referrals',
-    perRef: 'Standard Bonus',
-    extras: 'Access to basic referral dashboard',
-    color: 'from-amber-700 to-amber-600',
-    glow: 'shadow-amber-700/20',
-    border: 'border-amber-700/30',
-  },
-  {
-    level: 'Silver',
-    refs: '5–19 referrals',
-    perRef: 'Enhanced Bonus',
-    extras: '+ Leaderboard visibility',
-    color: 'from-gray-400 to-gray-300',
-    glow: 'shadow-gray-400/20',
-    border: 'border-gray-400/30',
-    popular: false,
-  },
-  {
-    level: 'Gold',
-    refs: '20–49 referrals',
-    perRef: 'Premium Bonus',
-    extras: '+ Priority hustle access',
-    color: 'from-amber-400 to-yellow-300',
-    glow: 'shadow-amber-400/30',
-    border: 'border-amber-400/40',
-    popular: true,
-  },
-  {
-    level: 'Platinum',
-    refs: '50+ referrals',
-    perRef: 'Maximum Bonus',
-    extras: '+ Exclusive VIP rewards',
-    color: 'from-blue-400 to-cyan-300',
-    glow: 'shadow-blue-400/20',
-    border: 'border-blue-400/30',
-  },
-];
+import {
+  formatReferralRange,
+  legacyReferralStepKeys,
+  parseReferralConfig,
+  referralConfigKey,
+  referralTierColors,
+} from '@/lib/referralConfig';
 
 export default function Referral() {
-  const referralCopy = useSiteContent(referralStepKeys);
-  const steps = defaultSteps.map((fallback, index) => referralCopy[referralStepKeys[index]] || fallback);
+  const referralCopy = useSiteContent([referralConfigKey, ...legacyReferralStepKeys]);
+  const config = parseReferralConfig(referralCopy[referralConfigKey], legacyReferralStepKeys.map(key => referralCopy[key]));
 
   return (
     <section id="referral" className="relative py-28 bg-[#0d0d0d] overflow-hidden">
@@ -86,9 +38,9 @@ export default function Referral() {
         <div className="grid lg:grid-cols-2 gap-16 items-center mb-20">
           {/* How referral works */}
           <div>
-            <h3 className="text-2xl font-black text-white mb-8">How Referrals Work</h3>
+            <h3 className="text-2xl font-black text-white mb-8">{config.stepsTitle}</h3>
             <div className="space-y-5">
-              {steps.map((step, i) => (
+              {config.steps.map((step, i) => (
                 <div key={i} className="flex gap-4">
                   <div className="flex-shrink-0 w-8 h-8 rounded-full bg-amber-400/15 border border-amber-400/30 flex items-center justify-center">
                     <span className="text-amber-400 text-xs font-black">{i + 1}</span>
@@ -160,13 +112,14 @@ export default function Referral() {
         {/* Tier table */}
         <div>
           <h3 className="text-2xl font-black text-white text-center mb-10">
-            Referral Reward Tiers
+            {config.tiersTitle}
           </h3>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
-            {tiers.map(tier => (
-              <div
-                key={tier.level}
-                className={`relative bg-[#111] border ${tier.border} rounded-2xl p-6 hover:-translate-y-1 transition-all duration-300 ${
+          <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+            {config.tiers.map(tier => {
+              const style = referralTierColors[tier.color];
+              return <div
+                key={tier.id}
+                className={`relative rounded-2xl border bg-[#111] p-6 transition-all duration-300 hover:-translate-y-1 ${style.border} ${
                   tier.popular ? 'ring-1 ring-amber-400/40' : ''
                 }`}
               >
@@ -176,15 +129,15 @@ export default function Referral() {
                   </div>
                 )}
                 <div
-                  className={`inline-block px-3 py-1.5 rounded-lg bg-gradient-to-r ${tier.color} text-black text-xs font-black mb-4`}
+                  className={`mb-4 inline-block rounded-lg bg-gradient-to-r px-3 py-1.5 text-xs font-black text-black ${style.gradient}`}
                 >
-                  {tier.level}
+                  {tier.name}
                 </div>
-                <p className="text-white font-bold text-sm mb-1">{tier.refs}</p>
-                <p className="text-amber-400 font-black text-base mb-1">{tier.perRef}</p>
-                <p className="text-gray-400 text-xs leading-relaxed">{tier.extras}</p>
-              </div>
-            ))}
+                <p className="mb-1 text-sm font-bold text-white">{formatReferralRange(tier)}</p>
+                {tier.rewardLabel && <p className="mb-1 text-base font-black text-amber-400">{tier.rewardLabel}</p>}
+                {tier.benefits && <p className="text-xs leading-relaxed text-gray-400">{tier.benefits}</p>}
+              </div>;
+            })}
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { CalendarCheck, Check, Loader2 } from 'lucide-react';
-import type { Balance } from '@/lib/supabase';
-import { supabase } from '@/lib/supabase';
+import type { Balance } from '@/lib/platformTypes';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Checkin = { checkin_date: string; streak: number; reward: number };
 
@@ -16,8 +16,8 @@ export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUp
     const today = new Date().toISOString().slice(0, 10);
     async function load() {
       const [{ data: latest }, { data: todayRecord }] = await Promise.all([
-        supabase.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
-        supabase.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).eq('checkin_date', today).maybeSingle(),
+        mysqlApi.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
+        mysqlApi.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).eq('checkin_date', today).maybeSingle(),
       ]);
       if (!active) return;
       setCheckin((todayRecord ?? latest) as Checkin | null);
@@ -30,7 +30,7 @@ export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUp
   async function claim() {
     setLoading(true);
     setMessage('');
-    const { data, error } = await supabase.rpc('claim_daily_checkin');
+    const { data, error } = await mysqlApi.rpc('claim_daily_checkin');
     if (error) {
       setMessage(error.message);
       setLoading(false);
@@ -40,7 +40,7 @@ export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUp
     setCheckin(reward);
     setClaimedToday(true);
     setMessage(`Hi, ${badge.toLowerCase()}, you just earned ₦${Number(reward.reward).toLocaleString()} for checking in and you are on a ${reward.streak}-day streak, ${firstName}.`);
-    const { data: balance } = await supabase.from('balances').select('*').eq('user_id', userId).maybeSingle();
+    const { data: balance } = await mysqlApi.from('balances').select('*').eq('user_id', userId).maybeSingle();
     if (balance) onBalanceUpdated(balance as Balance);
     setLoading(false);
   }

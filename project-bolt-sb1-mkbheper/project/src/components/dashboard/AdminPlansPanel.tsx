@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Check, Loader2, Plus, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Plan = {
   plan_code: string;
@@ -41,7 +41,7 @@ export default function AdminPlansPanel() {
 
   async function loadPlans() {
     setLoading(true);
-    const { data, error } = await supabase.from('subscription_plans').select('*').order('price');
+    const { data, error } = await mysqlApi.from('subscription_plans').select('*').order('price');
     if (error) setMessage(error.message);
     setPlans((data ?? []) as Plan[]);
     setLoading(false);
@@ -77,8 +77,8 @@ export default function AdminPlansPanel() {
       updated_at: new Date().toISOString(),
     };
     const result = editingCode
-      ? await supabase.from('subscription_plans').update(values).eq('plan_code', editingCode)
-      : await supabase.from('subscription_plans').insert(values);
+      ? await mysqlApi.from('subscription_plans').update(values).eq('plan_code', editingCode)
+      : await mysqlApi.from('subscription_plans').insert(values);
     setSaving(false);
     if (result.error) {
       setMessage(result.error.message);
@@ -95,7 +95,7 @@ export default function AdminPlansPanel() {
       setMessage('The free plan must remain active as a fallback.');
       return;
     }
-    const { error } = await supabase.from('subscription_plans')
+    const { error } = await mysqlApi.from('subscription_plans')
       .update({ is_active: !plan.is_active, updated_at: new Date().toISOString() })
       .eq('plan_code', plan.plan_code);
     if (error) {

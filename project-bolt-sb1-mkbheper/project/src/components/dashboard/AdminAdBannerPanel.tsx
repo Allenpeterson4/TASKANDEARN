@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Image, Loader2, Save, Trash2, Upload } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Advertisement = { image_path: string | null; target_url: string | null; enabled: boolean };
 const initial: Advertisement = { image_path: null, target_url: '', enabled: false };
@@ -24,7 +24,7 @@ export default function AdminAdBannerPanel() {
   }, [file]);
 
   useEffect(() => {
-    supabase.from('dashboard_advertisements').select('image_path, target_url, enabled').eq('singleton', true).maybeSingle()
+    mysqlApi.from('dashboard_advertisements').select('image_path, target_url, enabled').eq('singleton', true).maybeSingle()
       .then(({ data, error }) => {
         if (error) setMessage(error.message);
         if (data) setAdvertisement(data as Advertisement);
@@ -40,7 +40,7 @@ export default function AdminAdBannerPanel() {
     let imagePath = advertisement.image_path;
     if (file) {
       const path = `${crypto.randomUUID()}-${file.name.replace(/[^a-zA-Z0-9._-]/g, '-')}`;
-      const { error } = await supabase.storage.from('dashboard-ads').upload(path, file, { contentType: file.type, upsert: false });
+      const { error } = await mysqlApi.storage.from('dashboard-ads').upload(path, file, { contentType: file.type, upsert: false });
       if (error) {
         setSaving(false);
         setMessage(error.message);
@@ -48,8 +48,8 @@ export default function AdminAdBannerPanel() {
       }
       imagePath = path;
     }
-    const { data: user } = await supabase.auth.getUser();
-    const { error } = await supabase.from('dashboard_advertisements').upsert({ singleton: true, image_path: imagePath, target_url: advertisement.target_url.trim(), enabled: advertisement.enabled, updated_by: user.user?.id, updated_at: new Date().toISOString() });
+    const user = await mysqlApi.auth.getCurrentUser();
+    const { error } = await mysqlApi.from('dashboard_advertisements').upsert({ singleton: true, image_path: imagePath, target_url: advertisement.target_url.trim(), enabled: advertisement.enabled, updated_by: user?.id, updated_at: new Date().toISOString() });
     setSaving(false);
     if (error) {
       setMessage(error.message);
@@ -71,13 +71,13 @@ export default function AdminAdBannerPanel() {
     setSaving(true);
     setMessage('');
     const imagePath = advertisement.image_path;
-    const { data: user } = await supabase.auth.getUser();
-    const { error: updateError } = await supabase.from('dashboard_advertisements').upsert({
+    const user = await mysqlApi.auth.getCurrentUser();
+    const { error: updateError } = await mysqlApi.from('dashboard_advertisements').upsert({
       singleton: true,
       image_path: null,
       target_url: null,
       enabled: false,
-      updated_by: user.user?.id,
+      updated_by: user?.id,
       updated_at: new Date().toISOString(),
     });
     if (updateError) {
@@ -87,12 +87,12 @@ export default function AdminAdBannerPanel() {
     }
 
     setAdvertisement(initial);
-    const { error: removeError } = await supabase.storage.from('dashboard-ads').remove([imagePath]);
+    const { error: removeError } = await mysqlApi.storage.from('dashboard-ads').remove([imagePath]);
     setSaving(false);
     setMessage(removeError ? `Banner unpublished, but its image could not be deleted: ${removeError.message}` : 'Dashboard banner deleted.');
   }
 
-  const previewPath = filePreview ?? (advertisement.image_path ? supabase.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path).data.publicUrl : '');
+  const previewPath = filePreview ?? (advertisement.image_path ? mysqlApi.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path).data.publicUrl : '');
 
   return (
     <form onSubmit={save} className="max-w-3xl space-y-5">

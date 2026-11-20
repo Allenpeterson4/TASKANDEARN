@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { FileText, Image, Loader2, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { cacheSiteContent } from '@/hooks/useSiteContent';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
+import { legacyReferralStepKeys, referralConfigKey } from '@/lib/referralConfig';
 
 type ContentEntry = {
   content_key: string;
@@ -42,8 +43,8 @@ export default function AdminContentPanel() {
   async function loadContent() {
     setLoading(true);
     const [contentResult, mediaResult] = await Promise.all([
-      supabase.from('site_content').select('*').order('content_key'),
-      supabase.storage.from('site-media').list('', { limit: 100, sortBy: { column: 'created_at', order: 'desc' } }),
+      mysqlApi.from('site_content').select('*').order('content_key'),
+      mysqlApi.storage.from('site-media').list('', { limit: 100, sortBy: { column: 'created_at', order: 'desc' } }),
     ]);
     const error = contentResult.error ?? mediaResult.error;
     if (error) setMessage(error.message);
@@ -68,11 +69,16 @@ export default function AdminContentPanel() {
 
   const isImageContent = isImageContentKey(draft.content_key);
   const isBrandAsset = isBrandAssetKey(draft.content_key);
+  const copyEntries = entries.filter(entry =>
+    !isBrandingEntry(entry.content_key)
+    && entry.content_key !== referralConfigKey
+    && !legacyReferralStepKeys.includes(entry.content_key)
+  );
 
   function imageUrl(path: string) {
     if (!path) return '';
     if (/^https?:\/\//i.test(path)) return '';
-    return supabase.storage.from('site-media').getPublicUrl(path).data.publicUrl;
+    return mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl;
   }
 
   async function uploadContentImage(file?: File) {
@@ -85,7 +91,7 @@ export default function AdminContentPanel() {
     setSaving(true);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
     const path = `cms/${crypto.randomUUID()}-${safeName}`;
-    const { error } = await supabase.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
+    const { error } = await mysqlApi.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
     setSaving(false);
     if (error) {
       setMessage(error.message);
@@ -109,8 +115,8 @@ export default function AdminContentPanel() {
     const values = { title: draft.title.trim(), body: draft.body.trim(), updated_at: new Date().toISOString() };
     const previousBody = selected ? entries.find(entry => entry.content_key === selected)?.body : undefined;
     const result = selected
-      ? await supabase.from('site_content').update(values).eq('content_key', selected)
-      : await supabase.from('site_content').insert({ ...values, content_key: draft.content_key.trim().toLowerCase() });
+      ? await mysqlApi.from('site_content').update(values).eq('content_key', selected)
+      : await mysqlApi.from('site_content').insert({ ...values, content_key: draft.content_key.trim().toLowerCase() });
     setSaving(false);
     if (result.error) {
       setMessage(result.error.message);
@@ -120,7 +126,7 @@ export default function AdminContentPanel() {
       const contentKey = selected ?? draft.content_key.trim().toLowerCase();
       cacheSiteContent(contentKey, values.body);
       if (previousBody && previousBody !== values.body && !/^https?:\/\//i.test(previousBody)) {
-        await supabase.storage.from('site-media').remove([previousBody]);
+        await mysqlApi.storage.from('site-media').remove([previousBody]);
       }
     }
     setMessage('Content saved.');
@@ -129,14 +135,14 @@ export default function AdminContentPanel() {
 
   async function deleteEntry(entry: ContentEntry) {
     if (!window.confirm(`Delete content entry "${entry.content_key}"?`)) return;
-    const { error } = await supabase.from('site_content').delete().eq('content_key', entry.content_key);
+    const { error } = await mysqlApi.from('site_content').delete().eq('content_key', entry.content_key);
     if (error) {
       setMessage(error.message);
       return;
     }
     if (isImageContentKey(entry.content_key)) {
       cacheSiteContent(entry.content_key, '');
-      if (entry.body && !/^https?:\/\//i.test(entry.body)) await supabase.storage.from('site-media').remove([entry.body]);
+      if (entry.body && !/^https?:\/\//i.test(entry.body)) await mysqlApi.storage.from('site-media').remove([entry.body]);
     }
     if (selected === entry.content_key) newEntry();
     setMessage('Content entry deleted.');
@@ -154,7 +160,7 @@ export default function AdminContentPanel() {
     setSaving(true);
     const safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '-');
     const path = `${crypto.randomUUID()}-${safeName}`;
-    const { error } = await supabase.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
+    const { error } = await mysqlApi.storage.from('site-media').upload(path, file, { contentType: file.type, upsert: false });
     setSaving(false);
     if (error) {
       setMessage(error.message);
@@ -166,7 +172,7 @@ export default function AdminContentPanel() {
 
   async function deleteMedia(item: MediaItem) {
     if (!window.confirm(`Delete image "${item.name}"?`)) return;
-    const { error } = await supabase.storage.from('site-media').remove([item.name]);
+    const { error } = await mysqlApi.storage.from('site-media').remove([item.name]);
     if (error) {
       setMessage(error.message);
       return;
@@ -195,7 +201,7 @@ export default function AdminContentPanel() {
       {loading ? <div className="flex min-h-40 items-center justify-center text-gray-400"><Loader2 className="mr-2 animate-spin" size={17} /> Loading content</div> : mode === 'copy' ? (
         <div className="grid gap-6 lg:grid-cols-[minmax(220px,.8fr)_minmax(0,1.2fr)]">
           <div className="divide-y divide-white/8 border-y border-white/8">
-            {entries.filter(entry => !isBrandingEntry(entry.content_key)).map(entry => (
+            {copyEntries.map(entry => (
               <div key={entry.content_key} className={`flex items-start gap-2 py-3 ${selected === entry.content_key ? 'text-amber-300' : ''}`}>
                 <button onClick={() => selectEntry(entry)} className="min-w-0 flex-1 text-left">
                   <span className="block truncate text-sm font-semibold">{entry.title}</span>
@@ -204,7 +210,7 @@ export default function AdminContentPanel() {
                 <button onClick={() => deleteEntry(entry)} aria-label={`Delete ${entry.title}`} className="p-1 text-gray-500 hover:text-red-400"><Trash2 size={14} /></button>
               </div>
             ))}
-            {entries.every(entry => isBrandingEntry(entry.content_key)) && <p className="py-8 text-sm text-gray-500">No site copy entries yet.</p>}
+            {copyEntries.length === 0 && <p className="py-8 text-sm text-gray-500">No site copy entries yet.</p>}
           </div>
           <form onSubmit={saveEntry} className="space-y-4">
             <h2 className="font-bold">{selected ? 'Edit content' : 'Add content'}</h2>
@@ -222,7 +228,7 @@ export default function AdminContentPanel() {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {media.map(item => {
-            const { data } = supabase.storage.from('site-media').getPublicUrl(item.name);
+            const { data } = mysqlApi.storage.from('site-media').getPublicUrl(item.name);
             return (
               <article key={item.name} className="overflow-hidden border border-white/10 bg-white/3">
                 <img src={data.publicUrl} alt={item.name} className="aspect-video w-full object-contain bg-black/10" />

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, Crown, Loader2, RefreshCw, ShieldCheck, ArrowRight } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Plan = {
   plan_code: string;
@@ -32,8 +32,8 @@ export default function SubscriptionPanel({ userId, onSelectPlan }: { userId: st
   const loadPlans = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
     const [planResult, subscriptionResult] = await Promise.all([
-      supabase.from('subscription_plans').select('*').eq('is_active', true).order('price'),
-      supabase.from('user_subscriptions')
+      mysqlApi.from('subscription_plans').select('*').eq('is_active', true).order('price'),
+      mysqlApi.from('user_subscriptions')
         .select('plan_code, status, starts_at, ends_at')
         .eq('user_id', userId)
         .eq('status', 'active')

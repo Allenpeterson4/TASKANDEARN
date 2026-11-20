@@ -1,5 +1,5 @@
 import { BadgeCheck, CheckCircle, CircleDollarSign, ClipboardList, Clock3, History, XCircle } from 'lucide-react';
-import type { Task, TaskCompletion } from '@/lib/supabase';
+import type { Task, TaskCompletion } from '@/lib/platformTypes';
 
 interface Props {
   tasks: Task[];

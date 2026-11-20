@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { ChevronDown, ChevronUp, Trash2 } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Category = 'hustles' | 'withdrawals' | 'transactions';
 type CleanupCounts = {
@@ -26,7 +26,7 @@ function defaultCutoff() {
 
 async function removeStoragePaths(bucket: 'task-proofs' | 'funding-proofs', paths: string[]) {
   for (let index = 0; index < paths.length; index += 100) {
-    const { error } = await supabase.storage.from(bucket).remove(paths.slice(index, index + 100));
+    const { error } = await mysqlApi.storage.from(bucket).remove(paths.slice(index, index + 100));
     if (error) throw new Error(error.message);
   }
 }
@@ -47,7 +47,7 @@ export default function AdminStorageCleanupPanel({ onCleaned }: { onCleaned: () 
     }
     setBusy(true);
     setMessage('');
-    const { data, error } = await supabase.rpc('admin_preview_historical_cleanup', { p_before: cutoff });
+    const { data, error } = await mysqlApi.rpc('admin_preview_historical_cleanup', { p_before: cutoff });
     setBusy(false);
     if (error) {
       setMessage(error.message);
@@ -64,19 +64,19 @@ export default function AdminStorageCleanupPanel({ onCleaned }: { onCleaned: () 
     try {
       const before = `${cutoff}T00:00:00.000Z`;
       if (selected.hustles) {
-        const { data, error } = await supabase.from('task_completions').select('proof_path')
+        const { data, error } = await mysqlApi.from('task_completions').select('proof_path')
           .in('status', ['approved', 'rejected']).lt('completed_at', before).not('proof_path', 'is', null);
         if (error) throw new Error(error.message);
-        await removeStoragePaths('task-proofs', (data ?? []).map(row => row.proof_path).filter((path): path is string => !!path));
+        await removeStoragePaths('task-proofs', (data ?? []).map((row: { proof_path: string | null }) => row.proof_path).filter((path: string | null): path is string => !!path));
       }
       if (selected.transactions) {
-        const { data, error } = await supabase.from('funding_deposits').select('proof_path')
+        const { data, error } = await mysqlApi.from('funding_deposits').select('proof_path')
           .in('status', ['confirmed', 'rejected', 'expired']).lt('created_at', before).not('proof_path', 'is', null);
         if (error) throw new Error(error.message);
-        await removeStoragePaths('funding-proofs', (data ?? []).map(row => row.proof_path).filter((path): path is string => !!path));
+        await removeStoragePaths('funding-proofs', (data ?? []).map((row: { proof_path: string | null }) => row.proof_path).filter((path: string | null): path is string => !!path));
       }
 
-      const { data, error } = await supabase.rpc('admin_purge_historical_records', {
+      const { data, error } = await mysqlApi.rpc('admin_purge_historical_records', {
         p_before: cutoff,
         p_hustles: selected.hustles,
         p_withdrawals: selected.withdrawals,

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { AppUser } from '@/lib/mysqlApi';
 import {
   BadgeCheck,
   Ban,
@@ -34,7 +34,7 @@ import {
   Palette,
   Mail,
 } from 'lucide-react';
-import { supabase, type Profile, type Task, type TaskCompletion, type Withdrawal } from '@/lib/supabase';
+import { mysqlApi, type Profile, type Task, type TaskCompletion, type Withdrawal } from '@/lib/platformTypes';
 import ThemeToggle from '@/components/ThemeToggle';
 import AdminActivityPanel from './AdminActivityPanel';
 import AdminContentPanel from './AdminContentPanel';
@@ -52,8 +52,9 @@ import AdminAnnouncementPanel from './AdminAnnouncementPanel';
 import AdminBrandingPanel from './AdminBrandingPanel';
 import AdminThemeColorsPanel from './AdminThemeColorsPanel';
 import AdminEmailPanel from './AdminEmailPanel';
+import AdminReferralSettingsPanel from './AdminReferralSettingsPanel';
 
-type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportTickets' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding' | 'colors' | 'email';
+type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportTickets' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding' | 'colors' | 'email' | 'referralContent';
 type AccountStatus = 'active' | 'suspended' | 'banned';
 type VerificationMode = 'manual' | 'automatic';
 type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at' | 'avatar_url'> & {
@@ -115,6 +116,7 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'funding', label: 'Wallet funding', icon: CircleDollarSign },
   { id: 'supportTickets', label: 'Support tickets', icon: MessageCircle },
   { id: 'supportSettings', label: 'Live chat settings', icon: MessageCircle },
+  { id: 'referralContent', label: 'Referral content', icon: Users },
   { id: 'content', label: 'CMS & media', icon: FileText },
   { id: 'plans', label: 'Plans', icon: Package },
   { id: 'activity', label: 'Audit & logins', icon: History },
@@ -128,7 +130,7 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
 ];
 
 interface Props {
-  user: User;
+  user: AppUser;
 }
 
 export default function AdminPanel({ user }: Props) {
@@ -173,13 +175,13 @@ export default function AdminPanel({ user }: Props) {
       setMessage('');
       const start = page * 50;
       const [taskResult, profileResult, completionResult, withdrawalResult] = await Promise.all([
-        supabase.from('tasks').select('*').order('sort_order').order('created_at', { ascending: false }),
-        supabase.from('profiles')
+        mysqlApi.from('tasks').select('*').order('sort_order').order('created_at', { ascending: false }),
+        mysqlApi.from('profiles')
           .select('user_id, full_name, username, phone, tier, joined_at, account_status, status_reason, avatar_url', { count: 'exact' })
           .order('joined_at', { ascending: false })
           .range(start, start + 49),
-        supabase.from('task_completions').select('*').order('completed_at', { ascending: false }).limit(100),
-        supabase.from('withdrawals').select('*').order('requested_at', { ascending: false }).limit(100),
+        mysqlApi.from('task_completions').select('*').order('completed_at', { ascending: false }).limit(100),
+        mysqlApi.from('withdrawals').select('*').order('requested_at', { ascending: false }).limit(100),
       ]);
 
       const error = taskResult.error ?? profileResult.error ?? completionResult.error ?? withdrawalResult.error;
@@ -192,7 +194,7 @@ export default function AdminPanel({ user }: Props) {
       const currentProfiles = (profileResult.data ?? []) as AdminProfile[];
       const userIds = currentProfiles.map(profile => profile.user_id);
       const balanceResult = userIds.length
-        ? await supabase.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').in('user_id', userIds)
+        ? await mysqlApi.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').in('user_id', userIds)
         : { data: [], error: null };
       if (balanceResult.error) {
         if (active) setMessage(balanceResult.error.message);
@@ -203,7 +205,7 @@ export default function AdminPanel({ user }: Props) {
       const currentCompletions = (completionResult.data ?? []) as TaskCompletion[];
       const taskIds = [...new Set(currentCompletions.map(completion => completion.task_id))];
       const reviewTasks = taskIds.length
-        ? await supabase.from('tasks').select('id, title, reward').in('id', taskIds)
+        ? await mysqlApi.from('tasks').select('id, title, reward').in('id', taskIds)
         : { data: [], error: null };
       if (reviewTasks.error) {
         if (active) setMessage(reviewTasks.error.message);
@@ -212,7 +214,9 @@ export default function AdminPanel({ user }: Props) {
       }
 
       if (active) {
-        const taskDetails = new Map((reviewTasks.data ?? []).map(task => [task.id, task]));
+        const taskDetails = new Map<string, Pick<Task, 'title' | 'reward'>>(
+          (reviewTasks.data ?? []).map((task: Pick<Task, 'id' | 'title' | 'reward'>) => [task.id, task])
+        );
         setTasks((taskResult.data ?? []) as Task[]);
         setProfiles(currentProfiles);
         setBalances((balanceResult.data ?? []) as AdminBalance[]);
@@ -229,7 +233,7 @@ export default function AdminPanel({ user }: Props) {
 
   useEffect(() => {
     let active = true;
-    supabase.rpc('admin_fraud_flags').then(({ data, error }) => {
+    mysqlApi.rpc('admin_fraud_flags').then(({ data, error }) => {
       if (!active) return;
       if (error) setMessage(error.message);
       else setFraudFlags((data ?? []) as FraudFlag[]);
@@ -244,11 +248,11 @@ export default function AdminPanel({ user }: Props) {
     setResetLink('');
     setUserDetailLoading(true);
     const [detailsResult, balanceResult, ledgerResult, withdrawalsResult, fundingResult] = await Promise.all([
-      supabase.rpc('admin_user_details', { p_user_id: profile.user_id }),
-      supabase.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').eq('user_id', profile.user_id).maybeSingle(),
-      supabase.from('wallet_ledger').select('id, balance_type, amount, balance_before, balance_after, reason, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
-      supabase.from('withdrawals').select('*').eq('user_id', profile.user_id).order('requested_at', { ascending: false }).limit(50),
-      supabase.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
+      mysqlApi.rpc('admin_user_details', { p_user_id: profile.user_id }),
+      mysqlApi.from('balances').select('user_id, reward_balance, referral_balance, fund_balance, total_earned').eq('user_id', profile.user_id).maybeSingle(),
+      mysqlApi.from('wallet_ledger').select('id, balance_type, amount, balance_before, balance_after, reason, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
+      mysqlApi.from('withdrawals').select('*').eq('user_id', profile.user_id).order('requested_at', { ascending: false }).limit(50),
+      mysqlApi.from('funding_deposits').select('id, amount, payment_method, provider_reference, status, created_at').eq('user_id', profile.user_id).order('created_at', { ascending: false }).limit(50),
     ]);
     setUserDetailLoading(false);
     const error = detailsResult.error ?? balanceResult.error ?? ledgerResult.error ?? withdrawalsResult.error ?? fundingResult.error;
@@ -264,7 +268,7 @@ export default function AdminPanel({ user }: Props) {
 
   async function createPasswordResetLink() {
     if (!selectedUser) return;
-    const { data, error } = await supabase.functions.invoke('admin-reset-password', { body: { user_id: selectedUser.user_id } });
+    const { data, error } = await mysqlApi.functions.invoke('admin-reset-password', { body: { user_id: selectedUser.user_id } });
     if (error) return notify(error.message);
     setResetLink((data as { action_link?: string }).action_link ?? '');
     notify('Recovery link generated. Share it with the account owner through a verified channel.');
@@ -274,12 +278,12 @@ export default function AdminPanel({ user }: Props) {
     event.preventDefault();
     if (!messageUser || !adminMessageDraft.trim()) return;
     setSaving(true);
-    const { data: conversationId, error: conversationError } = await supabase.rpc('admin_start_support_conversation', { p_user_id: messageUser.user_id });
+    const { data: conversationId, error: conversationError } = await mysqlApi.rpc('admin_start_support_conversation', { p_user_id: messageUser.user_id });
     if (conversationError || !conversationId) {
       setSaving(false);
       return notify(conversationError?.message ?? 'Could not open a support conversation.');
     }
-    const { error } = await supabase.rpc('send_support_message', {
+    const { error } = await mysqlApi.rpc('send_support_message', {
       p_conversation_id: conversationId,
       p_body: adminMessageDraft.trim(),
     });
@@ -332,8 +336,8 @@ export default function AdminPanel({ user }: Props) {
       verification_mode: taskDraft.verification_mode,
     };
     const result = editingTask
-      ? await supabase.from('tasks').update(values).eq('id', editingTask)
-      : await supabase.from('tasks').insert(values);
+      ? await mysqlApi.from('tasks').update(values).eq('id', editingTask)
+      : await mysqlApi.from('tasks').insert(values);
     setSaving(false);
     if (result.error) return notify(result.error.message);
     setTaskDraft(emptyTask);
@@ -343,7 +347,7 @@ export default function AdminPanel({ user }: Props) {
   }
 
   async function toggleTask(task: Task) {
-    const { error } = await supabase.from('tasks').update({ is_active: !task.is_active }).eq('id', task.id);
+    const { error } = await mysqlApi.from('tasks').update({ is_active: !task.is_active }).eq('id', task.id);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
     notify(task.is_active ? 'Hustle paused.' : 'Hustle activated.');
@@ -351,7 +355,7 @@ export default function AdminPanel({ user }: Props) {
 
   async function shuffleTasks() {
     setSaving(true);
-    const { data, error } = await supabase.rpc('admin_shuffle_tasks', {
+    const { data, error } = await mysqlApi.rpc('admin_shuffle_tasks', {
       p_category: taskCategoryFilter === 'All' ? null : taskCategoryFilter,
     });
     setSaving(false);
@@ -362,7 +366,7 @@ export default function AdminPanel({ user }: Props) {
 
   async function setCategoryVerificationMode() {
     setSaving(true);
-    const { data, error } = await supabase.rpc('admin_set_task_verification_mode', {
+    const { data, error } = await mysqlApi.rpc('admin_set_task_verification_mode', {
       p_category: taskCategoryFilter === 'All' ? null : taskCategoryFilter,
       p_mode: bulkVerificationMode,
     });
@@ -374,7 +378,7 @@ export default function AdminPanel({ user }: Props) {
 
   async function deleteTask(task: Task) {
     if (!window.confirm(`Delete "${task.title}"? Existing submissions will also be removed.`)) return;
-    const { error } = await supabase.from('tasks').delete().eq('id', task.id);
+    const { error } = await mysqlApi.from('tasks').delete().eq('id', task.id);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
     notify('Hustle deleted.');
@@ -385,7 +389,7 @@ export default function AdminPanel({ user }: Props) {
     if (!walletUser) return;
     setSaving(true);
     const amount = Number(walletForm.amount) * (walletForm.direction === 'debit' ? -1 : 1);
-    const { error } = await supabase.rpc('admin_adjust_wallet', {
+    const { error } = await mysqlApi.rpc('admin_adjust_wallet', {
       p_user_id: walletUser.user_id,
       p_balance_type: walletForm.balanceType,
       p_amount: amount,
@@ -403,7 +407,7 @@ export default function AdminPanel({ user }: Props) {
     event.preventDefault();
     if (!statusTarget) return;
     setSaving(true);
-    const { error } = await supabase.rpc('admin_set_user_status', {
+    const { error } = await mysqlApi.rpc('admin_set_user_status', {
       p_user_id: statusTarget.profile.user_id,
       p_status: statusTarget.status,
       p_reason: statusReason.trim(),
@@ -418,7 +422,7 @@ export default function AdminPanel({ user }: Props) {
 
   async function reviewCompletion(completion: AdminCompletion, status: 'approved' | 'rejected') {
     if (status === 'rejected' && !window.confirm('Reject this hustle submission?')) return;
-    const { error } = await supabase.rpc('admin_review_task_completion', {
+    const { error } = await mysqlApi.rpc('admin_review_task_completion', {
       p_completion_id: completion.id,
       p_status: status,
       p_review_note: null,
@@ -432,7 +436,7 @@ export default function AdminPanel({ user }: Props) {
     if (selectedCompletionIds.length === 0) return notify('Select at least one pending hustle.');
     if (status === 'rejected' && !bulkReviewNote.trim()) return notify('Add an instruction message before bulk rejection.');
     setSaving(true);
-    const results = await Promise.all(selectedCompletionIds.map(completionId => supabase.rpc('admin_review_task_completion', {
+    const results = await Promise.all(selectedCompletionIds.map(completionId => mysqlApi.rpc('admin_review_task_completion', {
       p_completion_id: completionId,
       p_status: status,
       p_review_note: bulkReviewNote.trim() || null,
@@ -453,7 +457,7 @@ export default function AdminPanel({ user }: Props) {
     const reordered = [...tasks];
     [reordered[index], reordered[index + direction]] = [reordered[index + direction], reordered[index]];
     setSaving(true);
-    const { error } = await supabase.rpc('admin_reorder_tasks', { p_task_ids: reordered.map(item => item.id) });
+    const { error } = await mysqlApi.rpc('admin_reorder_tasks', { p_task_ids: reordered.map(item => item.id) });
     setSaving(false);
     if (error) return notify(error.message);
     setRefreshKey(current => current + 1);
@@ -461,8 +465,8 @@ export default function AdminPanel({ user }: Props) {
   }
 
   async function openTaskProof(path: string) {
-    const { data, error } = await supabase.storage.from('task-proofs').createSignedUrl(path, 120);
-    if (error) return notify(error.message);
+    const { data, error } = await mysqlApi.storage.from('task-proofs').createSignedUrl(path, 120);
+    if (error || !data) return notify(error?.message ?? 'Could not create a secure proof link.');
     window.open(data.signedUrl, '_blank', 'noopener,noreferrer');
   }
 
@@ -470,7 +474,7 @@ export default function AdminPanel({ user }: Props) {
     const reference = references[withdrawal.id] ?? '';
     if (status === 'paid' && !reference.trim()) return notify('Enter a transaction reference before marking paid.');
     if (status === 'rejected' && !window.confirm('Reject this withdrawal request?')) return;
-    const { error } = await supabase.rpc('admin_review_withdrawal', {
+    const { error } = await mysqlApi.rpc('admin_review_withdrawal', {
       p_withdrawal_id: withdrawal.id,
       p_status: status,
       p_transaction_reference: reference.trim() || null,
@@ -509,7 +513,7 @@ export default function AdminPanel({ user }: Props) {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button
-              onClick={() => supabase.auth.signOut()}
+              onClick={() => void mysqlApi.auth.signOut()}
               className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-red-400/30 hover:text-red-300"
             >
               <LogOut size={15} /> Sign out
@@ -638,7 +642,7 @@ export default function AdminPanel({ user }: Props) {
                     <label className="text-xs text-gray-400">Reward (₦)<input required type="number" min="0.01" step="0.01" value={taskDraft.reward} onChange={event => setTaskDraft({ ...taskDraft, reward: event.target.value })} className="admin-input mt-1" /></label>
                     <label className="text-xs text-gray-400">Daily quota (0 = none)<input required type="number" min="0" step="1" value={taskDraft.daily_quota} onChange={event => setTaskDraft({ ...taskDraft, daily_quota: event.target.value })} className="admin-input mt-1" /></label>
                   </div>
-                  <input type="url" required={taskDraft.verification_mode === 'automatic'} value={taskDraft.task_url} onChange={event => setTaskDraft({ ...taskDraft, task_url: event.target.value })} placeholder="Hustle URL" className="admin-input" />
+                  <input type="url" required value={taskDraft.task_url} onChange={event => setTaskDraft({ ...taskDraft, task_url: event.target.value })} placeholder="Hustle URL" className="admin-input" />
                   <label className="flex items-center gap-2 text-sm text-gray-300">
                     <input type="checkbox" checked={taskDraft.is_funded} onChange={event => setTaskDraft({ ...taskDraft, is_funded: event.target.checked })} className="accent-emerald-400" /> Campaign budget is funded and approved
                   </label>
@@ -787,6 +791,7 @@ export default function AdminPanel({ user }: Props) {
             {section === 'branding' && <AdminBrandingPanel />}
             {section === 'colors' && <AdminThemeColorsPanel />}
             {section === 'email' && <AdminEmailPanel />}
+            {section === 'referralContent' && <AdminReferralSettingsPanel />}
           </>
         )}
         </div>

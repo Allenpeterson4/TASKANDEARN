@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Check, ChevronLeft, ChevronRight, Loader2, MessageCircle, Send, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type Conversation = {
   id: string;
@@ -35,7 +35,7 @@ export default function AdminChatPanel() {
   const [totalCount, setTotalCount] = useState(0);
 
   const refreshConversations = useCallback(async () => {
-    let query = supabase.from('support_conversations')
+    let query = mysqlApi.from('support_conversations')
       .select('id, user_id, subject, status, created_at, updated_at', { count: 'exact' })
       .order('updated_at', { ascending: false })
       .range(page * 50, page * 50 + 49);
@@ -52,7 +52,7 @@ export default function AdminChatPanel() {
     if (!selectedId && rows.length) setSelectedId(rows[0].id);
     const userIds = [...new Set(rows.map(row => row.user_id))];
     if (userIds.length) {
-      const { data: names } = await supabase.from('profiles').select('user_id, full_name, username').in('user_id', userIds);
+      const { data: names } = await mysqlApi.from('profiles').select('user_id, full_name, username').in('user_id', userIds);
       if (names) setProfiles(new Map((names as ProfileName[]).map(profile => [profile.user_id, profile])));
     }
     setLoading(false);
@@ -69,7 +69,7 @@ export default function AdminChatPanel() {
       setMessages([]);
       return;
     }
-    const { data, error: loadError } = await supabase.from('support_messages')
+    const { data, error: loadError } = await mysqlApi.from('support_messages')
       .select('id, conversation_id, author_id, body, created_at')
       .eq('conversation_id', selectedId)
       .order('created_at', { ascending: true });
@@ -87,7 +87,7 @@ export default function AdminChatPanel() {
     event.preventDefault();
     if (!selectedId || !draft.trim()) return;
     setSending(true);
-    const { error: sendError } = await supabase.rpc('send_support_message', {
+    const { error: sendError } = await mysqlApi.rpc('send_support_message', {
       p_conversation_id: selectedId,
       p_body: draft.trim(),
     });
@@ -103,7 +103,7 @@ export default function AdminChatPanel() {
 
   async function setConversationStatus(status: Conversation['status']) {
     if (!selectedId) return;
-    const { error: closeError } = await supabase.rpc('admin_set_support_ticket_status', {
+    const { error: closeError } = await mysqlApi.rpc('admin_set_support_ticket_status', {
       p_conversation_id: selectedId,
       p_status: status,
     });

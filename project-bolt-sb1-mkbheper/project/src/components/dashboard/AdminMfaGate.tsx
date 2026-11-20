@@ -1,17 +1,16 @@
 import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { User } from '@supabase/supabase-js';
+import type { AppUser } from '@/lib/mysqlApi';
 import { Loader2, ShieldCheck } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/mysqlApi';
 
 interface Props {
-  user: User;
+  user: AppUser;
   children: ReactNode;
 }
 
 export default function AdminMfaGate({ user, children }: Props) {
-  const [factorId, setFactorId] = useState('');
-  const [qrCode, setQrCode] = useState('');
+  const [factorReady, setFactorReady] = useState(false);
   const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(true);
@@ -21,46 +20,27 @@ export default function AdminMfaGate({ user, children }: Props) {
   useEffect(() => {
     let active = true;
     async function prepare() {
-      const { data: assurance, error: assuranceError } = await supabase.auth.mfa.getAuthenticatorAssuranceLevel();
-      if (assuranceError) {
-        if (active) setError(assuranceError.message);
+      try {
+        const status = await mysqlApi.auth.mfaStatus();
+        if (!active) return;
+        if (status.verified) {
+          setVerified(true);
+          return;
+        }
+        if (!status.enabled) {
+          const enrollment = await mysqlApi.auth.enrollMfa();
+          if (!active) return;
+          setSecret(enrollment.secret);
+        }
+        setFactorReady(true);
+      } catch (mfaError) {
+        if (active) setError(mfaError instanceof Error ? mfaError.message : 'Could not prepare administrator verification.');
+      } finally {
         if (active) setLoading(false);
-        return;
       }
-      if (assurance.currentLevel === 'aal2') {
-        if (active) setVerified(true);
-        if (active) setLoading(false);
-        return;
-      }
-
-      const { data: factors, error: factorsError } = await supabase.auth.mfa.listFactors();
-      if (factorsError) {
-        if (active) setError(factorsError.message);
-        if (active) setLoading(false);
-        return;
-      }
-      const verifiedFactor = factors.totp.find(factor => factor.status === 'verified');
-      if (verifiedFactor) {
-        if (active) setFactorId(verifiedFactor.id);
-        if (active) setLoading(false);
-        return;
-      }
-
-      const { data: enrollment, error: enrollmentError } = await supabase.auth.mfa.enroll({
-        factorType: 'totp',
-        friendlyName: 'Admin authenticator',
-      });
-      if (enrollmentError) {
-        if (active) setError(enrollmentError.message);
-      } else if (active) {
-        setFactorId(enrollment.id);
-        setQrCode(enrollment.totp.qr_code);
-        setSecret(enrollment.totp.secret);
-      }
-      if (active) setLoading(false);
     }
 
-    prepare();
+    void prepare();
     return () => { active = false; };
   }, [user.id]);
 
@@ -68,13 +48,14 @@ export default function AdminMfaGate({ user, children }: Props) {
     event.preventDefault();
     setError('');
     setLoading(true);
-    const { error: verifyError } = await supabase.auth.mfa.challengeAndVerify({ factorId, code: code.trim() });
-    setLoading(false);
-    if (verifyError) {
-      setError('Verification failed. Check the code and try again.');
-      return;
+    try {
+      await mysqlApi.auth.verifyMfa(code.trim());
+      setVerified(true);
+    } catch (verifyError) {
+      setError(verifyError instanceof Error ? verifyError.message : 'Verification failed. Check the code and try again.');
+    } finally {
+      setLoading(false);
     }
-    setVerified(true);
   }
 
   if (verified) return children;
@@ -87,11 +68,11 @@ export default function AdminMfaGate({ user, children }: Props) {
           <div><h1 className="text-lg font-bold text-white">Admin verification</h1><p className="text-xs text-gray-400">Authenticator app required</p></div>
         </div>
         {loading && <p className="text-sm text-gray-400"><Loader2 className="mr-2 inline animate-spin" size={15} /> Preparing verification</p>}
-        {!loading && qrCode && <div className="space-y-3 text-center"><p className="text-sm text-gray-300">Scan this code, then enter the six-digit code from your authenticator app.</p><img src={qrCode} alt="Authenticator setup QR code" className="mx-auto h-48 w-48 bg-white p-2" /><details className="text-left text-xs text-gray-400"><summary className="cursor-pointer">Enter setup key manually</summary><code className="mt-2 block break-all bg-black/20 p-3">{secret}</code></details></div>}
-        {!loading && factorId && !qrCode && <p className="text-sm text-gray-300">Enter the code from your authenticator app.</p>}
-        {!loading && factorId && <label className="block text-xs text-gray-400">Verification code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={event => setCode(event.target.value)} className="admin-input mt-1 text-center text-lg tracking-[0.3em]" /></label>}
-        {error && <p role="alert" className="border border-red-400/20 bg-red-400/5 px-3 py-2 text-sm text-red-300">{error}</p>}
-        <button disabled={loading || !factorId} className="w-full rounded-lg bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">Verify and continue</button>
+        {!loading && secret && <div className="space-y-2 text-sm text-gray-300"><p>Add an account in your authenticator app using this setup key:</p><code className="block select-all break-all rounded-lg bg-black/30 p-3 text-center tracking-widest text-emerald-200">{secret}</code><p className="text-xs text-gray-500">Choose time-based one-time password (TOTP), 6 digits, 30-second interval.</p></div>}
+        {!loading && factorReady && !secret && <p className="text-sm text-gray-300">Enter the six-digit code from your authenticator app.</p>}
+        {!loading && factorReady && <label className="block text-xs text-gray-400">Verification code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={event => setCode(event.target.value)} className="admin-input mt-1 text-center text-lg tracking-[0.3em]" /></label>}
+        {error && <p role="alert" className="border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-sm text-amber-100">{error}</p>}
+        <button disabled={loading || !factorReady} className="w-full rounded-lg bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">Verify and continue</button>
       </form>
       <style>{`.admin-input{width:100%;border:1px solid rgba(255,255,255,.1);border-radius:.5rem;background:#0a0a0a;padding:.7rem .75rem;color:#fff;font-size:.875rem;outline:none}`}</style>
     </div>

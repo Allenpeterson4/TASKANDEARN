@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Loader2, MessageCircle, Send, X } from 'lucide-react';
-import { supabase } from '@/lib/supabase';
+import { mysqlApi } from '@/lib/platformTypes';
 
 type ChatMessage = {
   id: string;
@@ -28,14 +28,14 @@ export default function LiveChatWidget({ userId, onLoginRequired }: Props) {
     let active = true;
 
     async function syncConversation() {
-      const { data: id, error: createError } = await supabase.rpc('create_support_conversation');
+      const { data: id, error: createError } = await mysqlApi.rpc('create_support_conversation');
       if (createError) {
         if (active) setError(createError.message);
         return;
       }
       if (!active) return;
       setConversationId(id as string);
-      const { data, error: messageError } = await supabase.from('support_messages')
+      const { data, error: messageError } = await mysqlApi.from('support_messages')
         .select('id, author_id, body, created_at')
         .eq('conversation_id', id)
         .order('created_at', { ascending: true });
@@ -60,7 +60,7 @@ export default function LiveChatWidget({ userId, onLoginRequired }: Props) {
     if (!conversationId || !draft.trim()) return;
     setSending(true);
     setError('');
-    const { error: sendError } = await supabase.rpc('send_support_message', {
+    const { error: sendError } = await mysqlApi.rpc('send_support_message', {
       p_conversation_id: conversationId,
       p_body: draft.trim(),
     });
@@ -70,7 +70,7 @@ export default function LiveChatWidget({ userId, onLoginRequired }: Props) {
       return;
     }
     setDraft('');
-    const { data } = await supabase.from('support_messages')
+    const { data } = await mysqlApi.from('support_messages')
       .select('id, author_id, body, created_at')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true });
