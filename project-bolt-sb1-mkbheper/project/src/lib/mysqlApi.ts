@@ -19,31 +19,106 @@ interface QueryFilter {
 }
 
 const requestTimeoutMs = 20_000;
+const dashboardRequestTimeoutMs = 30_000;
 
 // Legacy data and RPC calls do not declare their response schemas yet.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type DynamicResponse = any;
 
-async function request<T>(path: string, body?: unknown): Promise<T> {
-  const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs);
-  try {
-    const response = await fetch(`/api/${path}`, {
-      method: body === undefined ? 'GET' : 'POST',
-      credentials: 'same-origin',
-      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-      signal: controller.signal,
-    });
-    const result = await response.json().catch(() => null) as { error?: string } | null;
-    if (!response.ok) throw new Error(result?.error ?? `Request failed (${response.status}).`);
-    return result as T;
-  } catch (error) {
-    if (controller.signal.aborted) throw new Error('The server took too long to respond. Please try again.');
-    throw error;
-  } finally {
-    window.clearTimeout(timeout);
+export interface DashboardFeaturePermission {
+  feature_key: string;
+  free_enabled: boolean;
+  premium_enabled: boolean;
+  settings: { allowed_plan_codes?: string[] } | null;
+}
+
+export interface DashboardCheckin {
+  checkin_date: string;
+  streak: number;
+  reward: number;
+}
+
+export interface DashboardAnnouncement {
+  title: string;
+  message: string;
+  enabled: boolean;
+  welcome_bonus: number;
+  require_social: boolean;
+  social_links: { label: string; url: string }[];
+}
+
+export interface DashboardAdvertisement {
+  image_path: string;
+  target_url: string;
+  enabled: boolean;
+}
+
+export interface DashboardCompletion {
+  id: string;
+  user_id: string;
+  task_id: string;
+  status: string;
+  completed_at: string;
+  reviewed_at: string | null;
+}
+
+export interface DashboardSettings {
+  available_plan_codes: string[];
+  current_plan_code: string;
+  feature_permissions: DashboardFeaturePermission[];
+}
+
+export interface DashboardSnapshot extends DashboardSettings {
+  profile: DynamicResponse | null;
+  balance: DynamicResponse | null;
+  tasks: DynamicResponse[];
+  completions: DashboardCompletion[];
+  referrals: DynamicResponse[];
+  withdrawals: DynamicResponse[];
+  funding_deposits: DynamicResponse[];
+  withdrawal_settings: DynamicResponse | null;
+  latest_checkin: DashboardCheckin | null;
+  today_checkin: DashboardCheckin | null;
+  activity: DynamicResponse[];
+  announcement: DashboardAnnouncement | null;
+  announcement_claimed: boolean;
+  advertisement: DashboardAdvertisement | null;
+}
+
+async function request<T>(path: string, body?: unknown, retryNetworkFailure = false, timeoutMs = requestTimeoutMs): Promise<T> {
+  const attempts = retryNetworkFailure ? 2 : 1;
+  for (let attempt = 0; attempt < attempts; attempt++) {
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
+    try {
+      const response = await fetch(`/api/${path}`, {
+        method: body === undefined ? 'GET' : 'POST',
+        credentials: 'same-origin',
+        headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+        body: body === undefined ? undefined : JSON.stringify(body),
+        signal: controller.signal,
+      });
+      const result = await response.json().catch(() => null) as { error?: string } | null;
+      if (!response.ok) throw new Error(result?.error ?? `Request failed (${response.status}).`);
+      return result as T;
+    } catch (error) {
+      const connectionReset = error instanceof TypeError;
+      if (connectionReset && attempt + 1 < attempts) {
+        await new Promise(resolve => window.setTimeout(resolve, 350));
+        continue;
+      }
+      if (controller.signal.aborted) {
+        throw new Error('The server connection timed out. Check the MySQL API hosting connection and try again.');
+      }
+      if (error instanceof TypeError) {
+        throw new Error('Could not reach the MySQL API. Check the site connection and try again.');
+      }
+      throw error;
+    } finally {
+      window.clearTimeout(timeout);
+    }
   }
+  throw new Error('Could not reach the MySQL API. Check the site connection and try again.');
 }
 
 class DataQueryBuilder implements PromiseLike<{ data: DynamicResponse; error: Error | null; count?: number | null }> {
@@ -131,7 +206,9 @@ class DataQueryBuilder implements PromiseLike<{ data: DynamicResponse; error: Er
       returnRows: this.returnRows,
       values: this.values,
     };
-    const result = request<{ data: DynamicResponse; count?: number | null }>('data', payload)
+    const retryNetworkFailure = this.action === 'select'
+      || (this.table === 'profiles' && this.action === 'update');
+    const result = request<{ data: DynamicResponse; count?: number | null }>('data', payload, retryNetworkFailure)
       .then(data => ({ ...data, error: null as Error | null }))
       .catch(error => ({ data: null, error: error instanceof Error ? error : new Error('Database request failed.') }));
     return result.then(onfulfilled, onrejected);
@@ -158,6 +235,14 @@ async function settled<T>(work: Promise<T>): Promise<{ data: T | null; error: Er
 }
 
 export const mysqlApi = {
+  dashboard: {
+    load() {
+      return settled(request<{ data: DashboardSnapshot }>('dashboard', undefined, true, dashboardRequestTimeoutMs).then(response => response.data));
+    },
+    settings() {
+      return settled(request<{ data: DashboardSettings }>('dashboard/settings', undefined, true, dashboardRequestTimeoutMs).then(response => response.data));
+    },
+  },
   from(table: string) {
     return new DataQueryBuilder(table);
   },
@@ -166,20 +251,20 @@ export const mysqlApi = {
       return this.getSession();
     },
     async getSession() {
-      const { user } = await request<{ user: AppUser | null }>('auth/session');
+      const { user } = await request<{ user: AppUser | null }>('auth/session', undefined, true);
       return user;
     },
     async signIn(email: string, password: string) {
-      const { user } = await request<{ user: AppUser }>('auth/login', { email, password });
+      const { user } = await request<{ user: AppUser }>('auth/login', { email, password }, true);
       notifyAuthChanged();
       return user;
     },
     async signOut() {
-      await request<{ ok: boolean }>('auth/logout', {});
+      await request<{ ok: boolean }>('auth/logout', {}, true);
       notifyAuthChanged();
     },
     async signUp(input: { email: string; password: string; fullName: string; phone: string; referralCode: string }) {
-      return request<{ ok: boolean; verification_required: boolean | null }>('auth/signup', input);
+      return request<{ ok: boolean; verification_required: boolean | null }>('auth/signup', input, true);
     },
     async requestPasswordReset(email: string) {
       return request<{ ok: boolean }>('auth/password-reset-request', { email });
@@ -200,7 +285,14 @@ export const mysqlApi = {
       return request<{ secret: string; otpauth_uri: string }>('auth/mfa/enroll', {});
     },
     async verifyMfa(code: string) {
-      return request<{ ok: boolean }>('auth/mfa/verify', { code });
+      const result = await request<{ ok: boolean }>('auth/mfa/verify', { code });
+      notifyAuthChanged();
+      return result;
+    },
+    async disableMfa() {
+      const result = await request<{ ok: boolean }>('auth/mfa/disable', {});
+      notifyAuthChanged();
+      return result;
     },
     subscribe(callback: () => void) {
       window.addEventListener(authEvent, callback);
@@ -228,12 +320,39 @@ export const mysqlApi = {
           form.set('path', path);
           form.set('upsert', options?.upsert ? '1' : '0');
           form.set('file', file, file.name);
-          return settled(fetch('/api/storage/upload', { method: 'POST', credentials: 'same-origin', body: form })
-            .then(async response => {
-              const result = await response.json().catch(() => null) as { error?: string } | null;
-              if (!response.ok) throw new Error(result?.error ?? `Upload failed (${response.status}).`);
-              return result;
-            }));
+          return settled((async () => {
+            for (let attempt = 0; attempt < 2; attempt++) {
+              const controller = new AbortController();
+              const timeout = window.setTimeout(() => controller.abort(), requestTimeoutMs);
+              try {
+                const response = await fetch('/api/storage/upload', {
+                  method: 'POST',
+                  credentials: 'same-origin',
+                  body: form,
+                  signal: controller.signal,
+                });
+                const result = await response.json().catch(() => null) as { error?: string } | null;
+                if (!response.ok) throw new Error(result?.error ?? `Upload failed (${response.status}).`);
+                return result;
+              } catch (error) {
+                const networkFailure = controller.signal.aborted || error instanceof TypeError;
+                if (networkFailure && attempt === 0) {
+                  await new Promise(resolve => window.setTimeout(resolve, 350));
+                  continue;
+                }
+                if (controller.signal.aborted) {
+                  throw new Error('The upload connection timed out. Check the hosting connection and try again.');
+                }
+                if (error instanceof TypeError) {
+                  throw new Error('Could not reach the upload service. Check the site connection and try again.');
+                }
+                throw error;
+              } finally {
+                window.clearTimeout(timeout);
+              }
+            }
+            throw new Error('Could not reach the upload service. Check the site connection and try again.');
+          })());
         },
         remove(paths: string[]) {
           return settled(request<{ removed: number }>('storage/remove', { bucket, paths }));

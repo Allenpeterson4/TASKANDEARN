@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Image, Loader2, Save, Trash2, Upload } from 'lucide-react';
 import { mysqlApi } from '@/lib/platformTypes';
+import { publicImageUrl } from '@/lib/publicImageUrl';
 
 type Advertisement = { image_path: string | null; target_url: string | null; enabled: boolean };
 const initial: Advertisement = { image_path: null, target_url: '', enabled: false };
@@ -92,7 +93,7 @@ export default function AdminAdBannerPanel() {
     setMessage(removeError ? `Banner unpublished, but its image could not be deleted: ${removeError.message}` : 'Dashboard banner deleted.');
   }
 
-  const previewPath = filePreview ?? (advertisement.image_path ? mysqlApi.storage.from('dashboard-ads').getPublicUrl(advertisement.image_path).data.publicUrl : '');
+  const previewPath = filePreview ?? publicImageUrl(advertisement.image_path, 'dashboard-ads') ?? '';
 
   return (
     <form onSubmit={save} className="max-w-3xl space-y-5">

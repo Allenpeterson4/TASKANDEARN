@@ -28,6 +28,42 @@ Using phpMyAdmin:
 2. Choose **Import**, select `database/schema.sql`, and start the import.
 3. Confirm the import completes without errors.
 
+The included schema defines all 40 MySQL tables used by the PHP API, including `users`, `profiles`, `balances`, `storage_files`, and the account, task, wallet, payment, referral, support, and admin tables. After importing, run this check in the selected database. It should return **no rows**; any returned name is a missing table:
+
+For an already-created database, importing `schema.sql` again does not add indexes to existing tables because the table definitions use `CREATE TABLE IF NOT EXISTS`. Run the idempotent dashboard referral-index upgrade once from phpMyAdmin or the MySQL command line:
+
+```text
+database/migrations/2026-11-20-dashboard-referral-index.sql
+```
+
+This adds a composite index for filtering and ordering a member's referrals. The script safely does nothing if the index is already present.
+
+```sql
+SELECT expected.table_name AS missing_table
+FROM (
+  SELECT 'users' AS table_name UNION ALL SELECT 'auth_sessions' UNION ALL SELECT 'auth_action_tokens'
+  UNION ALL SELECT 'admin_mfa_factors' UNION ALL SELECT 'profiles' UNION ALL SELECT 'balances'
+  UNION ALL SELECT 'subscription_plans' UNION ALL SELECT 'tasks' UNION ALL SELECT 'task_completions'
+  UNION ALL SELECT 'referrals' UNION ALL SELECT 'withdrawals' UNION ALL SELECT 'wallet_ledger'
+  UNION ALL SELECT 'user_subscriptions' UNION ALL SELECT 'funding_settings' UNION ALL SELECT 'funding_deposits'
+  UNION ALL SELECT 'site_content' UNION ALL SELECT 'platform_settings' UNION ALL SELECT 'daily_checkins'
+  UNION ALL SELECT 'user_activity_daily' UNION ALL SELECT 'reward_milestones' UNION ALL SELECT 'referral_reward_events'
+  UNION ALL SELECT 'leaderboard_reward_settings' UNION ALL SELECT 'leaderboard_reward_runs'
+  UNION ALL SELECT 'dashboard_advertisements' UNION ALL SELECT 'feature_permissions'
+  UNION ALL SELECT 'platform_announcements' UNION ALL SELECT 'welcome_bonus_claims' UNION ALL SELECT 'payout_settings'
+  UNION ALL SELECT 'campaign_submissions' UNION ALL SELECT 'task_verification_sessions'
+  UNION ALL SELECT 'task_verification_events' UNION ALL SELECT 'support_conversations' UNION ALL SELECT 'support_messages'
+  UNION ALL SELECT 'admin_activity_log' UNION ALL SELECT 'user_login_history' UNION ALL SELECT 'email_smtp_settings'
+  UNION ALL SELECT 'email_notification_templates' UNION ALL SELECT 'email_notification_queue'
+  UNION ALL SELECT 'auth_email_rate_limits' UNION ALL SELECT 'storage_files'
+) AS expected
+LEFT JOIN information_schema.tables AS actual
+  ON actual.table_schema = DATABASE()
+  AND actual.table_name = expected.table_name
+  AND actual.table_type = 'BASE TABLE'
+WHERE actual.table_name IS NULL;
+```
+
 If shell access is enabled, the equivalent command is:
 
 ```sh
@@ -78,6 +114,8 @@ public_html/
 
 The ZIP intentionally does not include `config.php`; create it from `config.example.php` after extraction. Keep the supplied `.htaccess` files in place. Do not move `cpanel/storage/` into a public URL. Ensure PHP can write to `cpanel/storage/` while keeping the directory inaccessible over HTTP.
 
+In cPanel File Manager, confirm `cpanel/storage/` is owned by your hosting account and writable by its PHP process (typically directory mode `750`; use `755` only if required by the host). Do not use `777`. The API returns a clear error and writes the filesystem failure to the PHP error log if the directory cannot be created or written.
+
 ## 6. Check the API and frontend
 
 Visit:
@@ -113,7 +151,7 @@ FROM users
 WHERE email = 'admin@your-domain.example';
 ```
 
-Use the real email address in both queries and verify the row before proceeding. Never add a public endpoint for changing account roles. Sign in, configure SMTP, and enable email delivery. The administrator must then verify their email before using admin APIs; on the first login, enroll and verify an authenticator as well.
+Use the real email address in both queries and verify the row before proceeding. Never add a public endpoint for changing account roles. Sign in, configure SMTP, and enable email delivery. The administrator must then verify their email before using admin APIs. Authenticator-based 2FA is optional; enable or disable it from **Admin → Security & 2FA** after signing in.
 
 ## 8. Configure email delivery
 

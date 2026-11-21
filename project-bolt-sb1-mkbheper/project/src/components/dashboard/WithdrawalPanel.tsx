@@ -1,13 +1,15 @@
 import { useEffect, useState } from 'react';
-import { CreditCard, Clock, CheckCircle, XCircle, Loader2, AlertCircle, WalletCards } from 'lucide-react';
+import { CreditCard, Clock, CheckCircle, XCircle, Loader2, AlertCircle, WalletCards, Users } from 'lucide-react';
 import type { Balance, Withdrawal } from '@/lib/platformTypes';
 import { mysqlApi } from '@/lib/platformTypes';
+import WalletBalanceCard from './WalletBalanceCard';
 
 interface Props {
   walletType: 'hustler' | 'referral';
   balance: Balance | null;
   withdrawals: Withdrawal[];
   onWithdrawalAdded: (w: Withdrawal) => void;
+  showBalanceCard?: boolean;
 }
 
 const banks = [
@@ -17,7 +19,7 @@ const banks = [
 ];
 const weekdayNames = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
-export default function WithdrawalPanel({ walletType, balance, withdrawals, onWithdrawalAdded }: Props) {
+export default function WithdrawalPanel({ walletType, balance, withdrawals, onWithdrawalAdded, showBalanceCard = true }: Props) {
   const [form, setForm] = useState({ amount: '', bank: '', accountNo: '', accountName: '' });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -30,6 +32,7 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
 
   const totalAvailable = walletType === 'hustler' ? (balance?.reward_balance ?? 0) : (balance?.referral_balance ?? 0);
   const walletLabel = walletType === 'hustler' ? 'Hustler Wallet' : 'Referral Wallet';
+  const WalletIcon = walletType === 'hustler' ? WalletCards : Users;
 
   useEffect(() => {
     let active = true;
@@ -112,22 +115,14 @@ export default function WithdrawalPanel({ walletType, balance, withdrawals, onWi
 
   return (
     <div className="space-y-6">
-      {/* Available balance */}
-      <div className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-[#171717] via-[#111] to-[#0d0d0d] p-6 shadow-[0_16px_40px_rgba(0,0,0,0.24)]">
-        <div className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-amber-300 to-orange-500" />
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <p className="text-xs font-bold uppercase tracking-[0.14em] text-amber-300">{walletLabel}</p>
-            <p className="mt-3 text-3xl font-black tracking-tight text-white sm:text-4xl">
-              ₦{totalAvailable.toLocaleString('en-NG', { minimumFractionDigits: 2 })}
-            </p>
-            <p className="mt-2 text-xs text-gray-400">Maximum withdrawal ₦{maximumWithdrawal.toLocaleString()} per request</p>
-          </div>
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-amber-300/15 bg-amber-300/10 text-amber-300">
-            <WalletCards size={21} />
-          </div>
-        </div>
-      </div>
+      {showBalanceCard && (
+        <WalletBalanceCard
+          label={walletLabel}
+          amount={`₦${totalAvailable.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+          icon={WalletIcon}
+          description={`Maximum withdrawal ₦${maximumWithdrawal.toLocaleString()} per request`}
+        />
+      )}
 
       {/* Withdrawal form */}
       <div className="bg-[#111] border border-white/6 rounded-2xl p-6">

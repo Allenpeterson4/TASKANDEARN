@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { ThemeContext } from '@/hooks/themeContext';
 import { defaultThemeColors, type Theme, type ThemeColors } from '@/hooks/themeContext';
 import { mysqlApi } from '@/lib/platformTypes';
+import { imageContentType, publicImageUrl } from '@/lib/publicImageUrl';
 
 function readCachedColors(): ThemeColors {
   try {
@@ -15,9 +16,8 @@ function readCachedColors(): ThemeColors {
 
 function updateBrandMeta(path: string | undefined) {
   if (!path) return;
-  const imageUrl = /^https?:\/\//i.test(path)
-    ? path
-    : mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl;
+  const imageUrl = publicImageUrl(path);
+  if (!imageUrl) return;
   for (const [selector, attribute, value] of [
     ['meta[property="og:image"]', 'property', 'og:image'],
     ['meta[name="twitter:image"]', 'name', 'twitter:image'],
@@ -98,15 +98,17 @@ export default function ThemeProvider({ children }: { children: ReactNode }) {
             }
           }
           const faviconPath = content['branding.favicon'];
-          if (faviconPath && !/^https?:\/\//i.test(faviconPath)) {
+          if (faviconPath) {
             let icon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
             if (!icon) {
               icon = document.createElement('link');
               icon.rel = 'icon';
               document.head.append(icon);
             }
-            icon.href = mysqlApi.storage.from('site-media').getPublicUrl(faviconPath).data.publicUrl;
-            icon.type = faviconPath.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+            icon.href = publicImageUrl(faviconPath) ?? '';
+            icon.type = imageContentType(faviconPath);
+          } else {
+            document.querySelector<HTMLLinkElement>('link[rel~="icon"]')?.remove();
           }
           updateBrandMeta(content['branding.site_logo'] || content['branding.logo']);
         });

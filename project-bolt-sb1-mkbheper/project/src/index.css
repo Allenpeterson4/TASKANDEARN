@@ -130,72 +130,6 @@
   background-color: rgba(24, 39, 56, 0.045) !important;
 }
 
-:root[data-theme='light'] [class~="text-white"] {
-  color: #000000 !important;
-}
-
-:root[data-theme='light'] [class~="text-gray-300"] {
-  color: #465361 !important;
-}
-
-:root[data-theme='light'] [class~="text-gray-400"] {
-  color: #586574 !important;
-}
-
-:root[data-theme='light'] [class~="text-gray-500"] {
-  color: #667381 !important;
-}
-
-:root[data-theme='light'] [class~="text-gray-600"] {
-  color: #74808c !important;
-}
-
-:root[data-theme='light'] [class~="text-amber-400"] {
-  color: #99520a !important;
-}
-
-:root[data-theme='light'] [class~="text-amber-300"] {
-  color: #8d4808 !important;
-}
-
-:root[data-theme='light'] [class~="text-green-400"],
-:root[data-theme='light'] [class~="text-green-300"] {
-  color: #176b43 !important;
-}
-
-:root[data-theme='light'] [class~="text-blue-400"] {
-  color: #205a91 !important;
-}
-
-:root[data-theme='light'] [class~="text-red-400"],
-:root[data-theme='light'] [class~="text-red-300"] {
-  color: #a52c2c !important;
-}
-
-:root[data-theme='light'] [class~="hover:text-white"]:hover {
-  color: #000000 !important;
-}
-
-:root[data-theme='light'] {
-  --text-primary: #000000;
-}
-
-:root[data-theme='light'] body,
-:root[data-theme='light'] [class*="text-gray-"],
-:root[data-theme='light'] [class*="text-emerald-"],
-:root[data-theme='light'] [class*="text-amber-"],
-:root[data-theme='light'] [class*="text-green-"],
-:root[data-theme='light'] [class*="text-blue-"],
-:root[data-theme='light'] [class*="text-red-"] {
-  color: #000000 !important;
-}
-
-:root:not([data-theme='light']) body,
-:root:not([data-theme='light']) [class*="bg-[#0a0a0a]"],
-:root:not([data-theme='light']) [class*="bg-[#080808]"] {
-  background-color: #000000 !important;
-}
-
 :root[data-theme='light'] [class*="border-white/"] {
   border-color: var(--border-subtle) !important;
 }
@@ -211,22 +145,6 @@
 :root[data-theme='light'] input::placeholder,
 :root[data-theme='light'] textarea::placeholder {
   color: #87919b;
-}
-
-:root[data-theme='light'] [class*="from-amber"] [class~="text-white"],
-:root[data-theme='light'] [class*="from-orange"] [class~="text-white"] {
-  color: #000000 !important;
-}
-
-:root[data-theme='light'] body * {
-  color: #000000 !important;
-}
-
-:root[data-theme='light'] input::placeholder,
-:root[data-theme='light'] textarea::placeholder,
-:root[data-theme='light'] select::placeholder {
-  color: #000000 !important;
-  opacity: 0.65;
 }
 
 :root[data-theme='light'] .hustler-wallet-card {

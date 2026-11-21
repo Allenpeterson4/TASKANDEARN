@@ -36,13 +36,13 @@ function storage_file_path(array $config, string $bucket, string $path, bool $cr
 {
     $root = rtrim((string)($config['storage']['path'] ?? ''), DIRECTORY_SEPARATOR);
     if ($root === '') throw new RuntimeException('Storage directory is not configured.');
-    if (!is_dir($root) && !mkdir($root, 0750, true) && !is_dir($root)) throw new RuntimeException('Could not create storage directory.');
+    if (!is_dir($root) && !@mkdir($root, 0750, true) && !is_dir($root)) throw new RuntimeException('Could not create storage directory. Check that PHP can write to the configured storage path.');
     $rootReal = realpath($root);
     if ($rootReal === false) throw new RuntimeException('Storage directory is unavailable.');
     $target = $rootReal . DIRECTORY_SEPARATOR . $bucket . DIRECTORY_SEPARATOR . str_replace('/', DIRECTORY_SEPARATOR, $path);
     $parent = dirname($target);
-    if ($createDirectory && !is_dir($parent) && !mkdir($parent, 0750, true) && !is_dir($parent)) {
-        throw new RuntimeException('Could not create storage subdirectory.');
+    if ($createDirectory && !is_dir($parent) && !@mkdir($parent, 0750, true) && !is_dir($parent)) {
+        throw new RuntimeException('Could not create storage subdirectory. Check that PHP can write to the configured storage path.');
     }
     if (is_dir($parent)) {
         $parentReal = realpath($parent);
@@ -152,9 +152,32 @@ function storage_upload(PDO $pdo, array $config): array
     }
     $target = storage_file_path($config, $bucket, $path, true);
     $exists = is_file($target);
-    if ($exists && ($_POST['upsert'] ?? '0') !== '1') respond(['error' => 'A file already exists at this path.'], 409);
-    if (!move_uploaded_file((string)$file['tmp_name'], $target)) throw new RuntimeException('Could not store the uploaded file.');
-    chmod($target, 0640);
+    if ($exists && ($_POST['upsert'] ?? '0') !== '1') {
+        $existing = $pdo->prepare(
+            'SELECT owner_id, mime_type, byte_size FROM storage_files WHERE bucket = ? AND object_path = ? LIMIT 1'
+        );
+        $existing->execute([$bucket, $path]);
+        $stored = $existing->fetch();
+        $storedHash = hash_file('sha256', $target);
+        $uploadHash = hash_file('sha256', (string)$file['tmp_name']);
+        $sameOwner = $stored && ($isAdmin || $stored['owner_id'] === $user['id']);
+        $sameMetadata = $stored
+            && $stored['mime_type'] === $mime
+            && (int)$stored['byte_size'] === (int)$file['size'];
+        if ($sameOwner && $sameMetadata && is_string($storedHash) && is_string($uploadHash)
+            && hash_equals($storedHash, $uploadHash)) {
+            return ['path' => $path];
+        }
+        if (!$stored && is_string($storedHash) && is_string($uploadHash) && hash_equals($storedHash, $uploadHash)) {
+            // A previous upload may have stored the file before its metadata insert or response completed.
+        } else {
+            respond(['error' => 'A file already exists at this path.'], 409);
+        }
+    } elseif (!move_uploaded_file((string)$file['tmp_name'], $target)) {
+        throw new RuntimeException('Could not store the uploaded file.');
+    } else {
+        if (!@chmod($target, 0640)) throw new RuntimeException('Could not secure the stored file permissions.');
+    }
 
     $public = (bool)$policy['public'];
     $statement = $pdo->prepare(

@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import {
   LayoutDashboard,
   ClipboardList,
@@ -14,8 +15,8 @@ import {
 } from 'lucide-react';
 import ThemeToggle from '@/components/ThemeToggle';
 import BrandLogo from '@/components/BrandLogo';
-import { mysqlApi } from '@/lib/platformTypes';
 import { useSiteContent } from '@/hooks/useSiteContent';
+import { publicImageUrl } from '@/lib/publicImageUrl';
 
 export type DashTab =
   | 'overview'
@@ -35,6 +36,7 @@ interface Props {
   avatarUrl: string | null;
   tier: string;
   onLogout: () => void;
+  loggingOut: boolean;
   taskCount: number;
   showPlans: boolean;
   featureAccess: Record<string, boolean>;
@@ -61,13 +63,13 @@ const tierColors: Record<string, string> = {
 };
 
 export default function DashSidebar({
-  active, onChange, fullName, avatarUrl, tier, onLogout, taskCount, showPlans, featureAccess, sideOpen, setSideOpen,
+  active, onChange, fullName, avatarUrl, tier, onLogout, loggingOut, taskCount, showPlans, featureAccess, sideOpen, setSideOpen,
 }: Props) {
   const leaderboardContent = useSiteContent(['branding.leaderboard_icon']);
   const leaderboardIconPath = leaderboardContent['branding.leaderboard_icon'] ?? '';
-  const leaderboardIconUrl = leaderboardIconPath && !/^https?:\/\//i.test(leaderboardIconPath)
-    ? mysqlApi.storage.from('site-media').getPublicUrl(leaderboardIconPath).data.publicUrl
-    : '';
+  const leaderboardIconUrl = publicImageUrl(leaderboardIconPath);
+  const [leaderboardIconFailed, setLeaderboardIconFailed] = useState(false);
+  useEffect(() => setLeaderboardIconFailed(false), [leaderboardIconUrl]);
   const initials = fullName
     ? fullName.split(' ').map(w => w[0]).slice(0, 2).join('').toUpperCase()
     : 'MH';
@@ -142,7 +144,8 @@ export default function DashSidebar({
                     {item.id === 'leaderboard' ? (
                       <span className={`-ml-1 flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg border ${isActive ? 'border-amber-300/30 bg-gradient-to-br from-amber-300/20 to-orange-500/10 text-amber-300' : 'border-white/10 bg-white/5 text-gray-300'}`}>
                         {leaderboardIconUrl
-                          ? <img src={leaderboardIconUrl} alt="" className="h-full w-full object-contain p-1" />
+                          && !leaderboardIconFailed
+                          ? <img src={leaderboardIconUrl} alt="" onError={() => setLeaderboardIconFailed(true)} className="h-full w-full object-contain p-1" />
                           : <Icon size={16} />}
                       </span>
                     ) : <Icon size={17} className={isActive ? 'text-amber-400' : ''} />}
@@ -162,11 +165,14 @@ export default function DashSidebar({
         {/* Logout */}
         <div className="px-3 py-4 border-t border-white/6">
           <button
-            onClick={onLogout}
-            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/8 transition-all"
+            type="button"
+            disabled={loggingOut}
+            aria-busy={loggingOut}
+            onClick={() => { setSideOpen(false); onLogout(); }}
+            className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium text-gray-400 hover:text-red-400 hover:bg-red-500/8 transition-all disabled:cursor-wait disabled:opacity-60"
           >
-            <LogOut size={17} />
-            Sign Out (Logout)
+            {loggingOut ? <span className="h-[17px] w-[17px] animate-spin rounded-full border-2 border-current border-r-transparent" /> : <LogOut size={17} />}
+            {loggingOut ? 'Signing out…' : 'Sign Out (Logout)'}
           </button>
         </div>
       </aside>

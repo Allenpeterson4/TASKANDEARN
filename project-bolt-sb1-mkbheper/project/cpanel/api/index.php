@@ -3,6 +3,7 @@ declare(strict_types=1);
 
 require __DIR__ . '/bootstrap.php';
 require __DIR__ . '/data.php';
+require __DIR__ . '/dashboard.php';
 require __DIR__ . '/storage.php';
 require __DIR__ . '/functions.php';
 require __DIR__ . '/rpc.php';
@@ -16,7 +17,47 @@ try {
 
     if ($path === '/api/health' && $method === 'GET') {
         $pdo->query('SELECT 1');
+        $requiredTables = [
+            'users', 'auth_sessions', 'auth_action_tokens', 'admin_mfa_factors', 'profiles', 'balances',
+            'subscription_plans', 'tasks', 'task_completions', 'referrals', 'withdrawals', 'wallet_ledger',
+            'user_subscriptions', 'funding_settings', 'funding_deposits', 'site_content', 'platform_settings',
+            'daily_checkins', 'user_activity_daily', 'reward_milestones', 'referral_reward_events',
+            'leaderboard_reward_settings', 'leaderboard_reward_runs', 'dashboard_advertisements',
+            'feature_permissions', 'platform_announcements', 'welcome_bonus_claims', 'payout_settings',
+            'campaign_submissions', 'task_verification_sessions', 'task_verification_events',
+            'support_conversations', 'support_messages', 'admin_activity_log', 'user_login_history',
+            'email_smtp_settings', 'email_notification_templates', 'email_notification_queue',
+            'auth_email_rate_limits', 'storage_files',
+        ];
+        $placeholders = implode(', ', array_fill(0, count($requiredTables), '?'));
+        $schemaCheck = $pdo->prepare(
+            'SELECT table_name FROM information_schema.tables
+             WHERE table_schema = DATABASE() AND table_type = \'BASE TABLE\'
+               AND table_name IN (' . $placeholders . ')'
+        );
+        $schemaCheck->execute($requiredTables);
+        $availableTables = $schemaCheck->fetchAll(PDO::FETCH_COLUMN);
+        $missingTables = array_values(array_diff($requiredTables, $availableTables));
+        if ($missingTables) {
+            error_log('MrHustler MySQL schema is incomplete; missing tables: ' . implode(', ', $missingTables));
+            respond(['ok' => false, 'database' => 'mysql', 'error' => 'The MySQL schema is incomplete. Import the complete cpanel/database/schema.sql file.'], 503);
+        }
         respond(['ok' => true, 'database' => 'mysql']);
+    }
+
+    if (($path === '/api/dashboard' || $path === '/api/dashboard/settings') && $method === 'GET') {
+        $dashboardStartedAt = microtime(true);
+        register_shutdown_function(static function () use ($dashboardStartedAt): void {
+            $durationMs = (int)round((microtime(true) - $dashboardStartedAt) * 1000);
+            if ($durationMs >= 5000) error_log("MrHustler slow dashboard response ({$durationMs}ms).");
+        });
+        $user = request_user($pdo, $config);
+        if (!$user) respond(['error' => 'Sign in to load your dashboard.'], 401);
+        if (($user['app_metadata']['role'] ?? '') === 'admin') $user = require_admin($pdo, $config);
+        $payload = $path === '/api/dashboard'
+            ? dashboard_snapshot($pdo, (string)$user['id'])
+            : dashboard_settings($pdo, (string)$user['id']);
+        respond(['data' => $payload]);
     }
 
     if (preg_match('#^/api/payments/webhook/(paystack|flutterwave)$#', $path, $paymentMatch) && $method === 'POST') {
@@ -141,8 +182,19 @@ try {
         $pdo->prepare('UPDATE admin_mfa_factors SET verified_at = COALESCE(verified_at, UTC_TIMESTAMP(3)) WHERE user_id = ?')->execute([$user['id']]);
         $cookieName = $config['app']['session_cookie'] ?? 'mrhustler_session';
         $token = $_COOKIE[$cookieName] ?? '';
+        $tokenHash = hash('sha256', (string)$token);
+        $pdo->prepare('UPDATE auth_sessions SET mfa_verified_at = NULL WHERE user_id = ? AND token_hash <> ?')
+            ->execute([$user['id'], $tokenHash]);
         $pdo->prepare('UPDATE auth_sessions SET mfa_verified_at = UTC_TIMESTAMP(3) WHERE token_hash = ? AND user_id = ?')
-            ->execute([hash('sha256', (string)$token), $user['id']]);
+            ->execute([$tokenHash, $user['id']]);
+        $pdo->commit();
+        respond(['ok' => true]);
+    }
+
+    if ($path === '/api/auth/mfa/disable' && $method === 'POST') {
+        $user = require_admin($pdo, $config);
+        $pdo->beginTransaction();
+        $pdo->prepare('DELETE FROM admin_mfa_factors WHERE user_id = ?')->execute([$user['id']]);
         $pdo->commit();
         respond(['ok' => true]);
     }
@@ -162,8 +214,17 @@ try {
         }
         $existing = $pdo->prepare('SELECT id FROM users WHERE email = ? LIMIT 1');
         $existing->execute([$email]);
-        if ($existing->fetch()) respond(['ok' => true, 'verification_required' => null]);
         $emailDeliveryEnabled = email_delivery_enabled($pdo);
+        $existingUser = $existing->fetch();
+        if ($existingUser) {
+            $verificationRequired = false;
+            if ($emailDeliveryEnabled) {
+                $verified = $pdo->prepare('SELECT email_verified_at FROM users WHERE id = ? LIMIT 1');
+                $verified->execute([$existingUser['id']]);
+                $verificationRequired = $verified->fetchColumn() === null;
+            }
+            respond(['ok' => true, 'verification_required' => $verificationRequired]);
+        }
 
         $userId = uuid_v4();
         $profileId = uuid_v4();
@@ -309,6 +370,7 @@ try {
 
         $statement = $pdo->prepare(
             'SELECT u.id, u.email, u.password_hash, u.email_verified_at, u.account_status, u.role,
+                    EXISTS(SELECT 1 FROM admin_mfa_factors f WHERE f.user_id = u.id AND f.verified_at IS NOT NULL) AS mfa_enabled,
                     p.account_status AS profile_status
              FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.email = ? LIMIT 1'
         );
@@ -338,7 +400,7 @@ try {
 
         $pdo->beginTransaction();
         $pdo->prepare('DELETE FROM auth_sessions WHERE user_id = ? AND expires_at <= UTC_TIMESTAMP(3)')->execute([$user['id']]);
-        issue_session($pdo, $config, $user['id'], $user['role'] === 'admin');
+        issue_session($pdo, $config, $user['id'], $user['role'] === 'admin' && (bool)$user['mfa_enabled']);
         $pdo->prepare('INSERT INTO user_login_history (id, user_id, ip_address, user_agent) VALUES (?, ?, ?, ?)')
             ->execute([
                 uuid_v4(),
@@ -357,7 +419,14 @@ try {
         if (is_string($token) && preg_match('/^[A-Za-z0-9_-]{40,100}$/', $token)) {
             $pdo->prepare('DELETE FROM auth_sessions WHERE token_hash = ?')->execute([hash('sha256', $token)]);
         }
-        setcookie($cookieName, '', ['expires' => 1, 'path' => '/', 'httponly' => true, 'samesite' => 'Lax']);
+        $secure = str_starts_with(strtolower((string)($config['app']['base_url'] ?? '')), 'https://');
+        setcookie($cookieName, '', [
+            'expires' => 1,
+            'path' => '/',
+            'secure' => $secure,
+            'httponly' => true,
+            'samesite' => 'Lax',
+        ]);
         respond(['ok' => true]);
     }
 

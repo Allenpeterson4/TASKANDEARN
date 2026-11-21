@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Image, Loader2, Trash2, Upload } from 'lucide-react';
 import { cacheSiteContent } from '@/hooks/useSiteContent';
 import { mysqlApi } from '@/lib/platformTypes';
+import { publicImageUrl } from '@/lib/publicImageUrl';
 
 const logoSettings = [
   { key: 'branding.site_logo', title: 'Website logo', description: 'Upload a transparent PNG or SVG for the navigation, footer, sign-in screen, and dashboard.' },
@@ -35,7 +36,7 @@ export default function AdminBrandingPanel() {
   }, []);
 
   function publicUrl(path: string) {
-    return path && !/^https?:\/\//i.test(path) ? mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl : '';
+    return publicImageUrl(path) ?? '';
   }
 
   async function uploadLogo(key: LogoKey, file?: File) {
@@ -110,7 +111,7 @@ export default function AdminBrandingPanel() {
               <article key={setting.key} className="border border-white/10 bg-white/[0.02] p-5">
                 <div className="mb-4"><h3 className="font-bold text-white">{setting.title}</h3><p className="mt-1 text-xs text-gray-400">{setting.description}</p></div>
                 <div className="mb-4 flex h-36 items-center justify-center border border-dashed border-white/10 bg-black/20 p-5">
-                  {preview ? <img src={preview} alt={`${setting.title} preview`} className="max-h-full max-w-full object-contain" /> : path && /^https?:\/\//i.test(path) ? <p className="text-center text-xs text-amber-200">Legacy URL found. Upload an image file to replace it.</p> : <div className="flex h-14 w-14 items-center justify-center bg-white/5 text-gray-400"><Image size={22} /></div>}
+                  {preview ? <img src={preview} alt={`${setting.title} preview`} className="max-h-full max-w-full object-contain" /> : <div className="flex h-14 w-14 items-center justify-center bg-white/5 text-gray-400"><Image size={22} /></div>}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <label className="flex cursor-pointer items-center gap-2 bg-amber-400 px-3 py-2 text-xs font-bold text-black">

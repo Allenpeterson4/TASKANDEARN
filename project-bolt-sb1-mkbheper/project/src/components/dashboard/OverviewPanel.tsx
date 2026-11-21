@@ -1,9 +1,10 @@
 import { useMemo, useState } from 'react';
 import { Zap, Clock, ArrowUpRight, ChevronRight, X, BarChart3, WalletCards } from 'lucide-react';
-import BrandLogo from '@/components/BrandLogo';
 import type { Balance, Profile, Task, Withdrawal, TaskCompletion } from '@/lib/platformTypes';
+import type { DashboardSnapshot } from '@/lib/mysqlApi';
 import DailyCheckinCard from './DailyCheckinCard';
 import WithdrawalProgressCard from './WithdrawalProgressCard';
+import WalletBalanceCard from './WalletBalanceCard';
 
 interface Props {
   profile: Profile | null;
@@ -11,13 +12,17 @@ interface Props {
   tasks: Task[];
   completions: TaskCompletion[];
   withdrawals: Withdrawal[];
+  withdrawalSettings: DashboardSnapshot['withdrawal_settings'];
+  latestCheckin: DashboardSnapshot['latest_checkin'];
+  todayCheckin: DashboardSnapshot['today_checkin'];
+  activityRows: DashboardSnapshot['activity'];
   referralCount: number;
   userId: string;
   onNavigate: (tab: 'tasks' | 'referral' | 'wallet' | 'plans') => void;
   onBalanceUpdated: (balance: Balance) => void;
 }
 
-export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, referralCount, userId, onNavigate, onBalanceUpdated }: Props) {
+export default function OverviewPanel({ profile, balance, tasks, completions, withdrawals, withdrawalSettings, latestCheckin, todayCheckin, activityRows, referralCount, userId, onNavigate, onBalanceUpdated }: Props) {
   const [chartPeriod, setChartPeriod] = useState<'daily' | 'weekly' | 'monthly'>('daily');
 
   const done = completions.filter(c => c.status === 'approved').length;
@@ -69,28 +74,15 @@ export default function OverviewPanel({ profile, balance, tasks, completions, wi
         </div>
       </section>
 
-      <section className="hustler-wallet-card relative isolate overflow-hidden rounded-2xl border border-amber-300/60 bg-gradient-to-br from-[#21190c] via-[#17140f] to-[#10100f] p-4 shadow-[0_0_24px_-8px_rgba(249,115,22,0.7)] sm:p-5" aria-label="Hustler wallet balance">
-        <div className="relative z-10 grid min-h-52 grid-cols-1 items-center gap-5 py-3 text-center sm:min-h-56 sm:grid-cols-[minmax(0,1fr)_minmax(140px,.8fr)_auto] sm:gap-4 sm:py-2 sm:text-left">
-          <div>
-            <p className="hustler-wallet-title flex items-center justify-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-amber-300 sm:justify-start sm:text-sm">
-              <WalletCards size={21} strokeWidth={2.5} />
-              Hustler wallet
-            </p>
-            <p className="mt-2 text-4xl font-black leading-none tracking-tight text-white sm:text-5xl xl:text-6xl">₦{hustleBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p>
-          </div>
-          <BrandLogo
-            className="hustler-wallet-logo mx-auto flex h-32 w-32 items-center justify-center sm:h-40 sm:w-40 xl:h-48 xl:w-48"
-            showWordmark={false}
-            showFallback={false}
-          />
-          <button onClick={() => onNavigate('wallet')} className="mx-auto inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/40 bg-amber-400 px-4 py-2.5 text-xs font-bold text-[#21190c] transition-colors hover:bg-amber-300 sm:mx-0 sm:px-5 sm:py-3 sm:text-sm">
-            Open wallet <ArrowUpRight size={16} />
-          </button>
-        </div>
-      </section>
+      <WalletBalanceCard
+        label="Hustler wallet"
+        amount={`₦${hustleBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+        icon={WalletCards}
+        action={<button onClick={() => onNavigate('wallet')} className="mx-auto inline-flex items-center justify-center gap-1.5 whitespace-nowrap rounded-full border border-amber-200/40 bg-amber-400 px-4 py-2.5 text-xs font-bold text-[#21190c] transition-colors hover:bg-amber-300 md:mx-0 md:px-5 md:py-3 md:text-sm">Open wallet <ArrowUpRight size={16} /></button>}
+      />
 
-      <WithdrawalProgressCard userId={userId} approvedHustles={done} referralCount={referralCount} tasks={tasks} completions={completions} />
-      <DailyCheckinCard userId={userId} firstName={firstName} badge={hustleBadge} onBalanceUpdated={onBalanceUpdated} />
+      <WithdrawalProgressCard settingsData={withdrawalSettings} latestCheckin={latestCheckin} activityRows={activityRows} approvedHustles={done} referralCount={referralCount} tasks={tasks} completions={completions} />
+      <DailyCheckinCard userId={userId} firstName={firstName} badge={hustleBadge} latestCheckin={latestCheckin} todayCheckin={todayCheckin} onBalanceUpdated={onBalanceUpdated} />
 
       {/* Available hustles preview */}
       <div className="overflow-hidden rounded-xl border border-white/8 bg-[#111]">

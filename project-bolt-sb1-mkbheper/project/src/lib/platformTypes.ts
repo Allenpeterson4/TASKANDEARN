@@ -52,11 +52,11 @@ export type TaskCompletion = {
   task_id: string;
   status: string;
   completed_at: string;
-  proof_text: string | null;
-  review_note: string | null;
-  reviewed_at: string | null;
-  reviewed_by: string | null;
-  proof_path: string | null;
+  proof_text?: string | null;
+  review_note?: string | null;
+  reviewed_at?: string | null;
+  reviewed_by?: string | null;
+  proof_path?: string | null;
 };
 
 export type Referral = {

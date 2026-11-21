@@ -1,5 +1,6 @@
-import { mysqlApi } from '@/lib/platformTypes';
+import { useState } from 'react';
 import { useSiteContent } from '@/hooks/useSiteContent';
+import { publicImageUrl } from '@/lib/publicImageUrl';
 
 type LogoVariant = 'site' | 'preloader';
 
@@ -29,9 +30,12 @@ export default function BrandLogo({
   const path = (variant === 'preloader'
     ? [content[contentKey], content['branding.site_logo'], content['branding.logo']]
     : [content[contentKey], content['branding.logo']]
-  ).find(value => value && !/^https?:\/\//i.test(value)) ?? '';
-  const imageUrl = path ? mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl : null;
-  const image = imageUrl ? <img src={imageUrl} alt="MrHustler logo" loading="eager" fetchPriority="high" className="h-full w-full object-contain" /> : null;
+  ).find(value => value?.trim()) ?? '';
+  const imageUrl = publicImageUrl(path);
+  const [failedImageUrl, setFailedImageUrl] = useState<string | null>(null);
+  const image = imageUrl && failedImageUrl !== imageUrl
+    ? <img src={imageUrl} alt="MrHustler logo" loading="eager" fetchPriority="high" onError={() => setFailedImageUrl(imageUrl)} className="h-full w-full object-contain" />
+    : null;
 
   return (
     <div className={className}>

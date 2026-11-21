@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { User, Phone, Mail, Save, Loader2, CheckCircle, Camera, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Phone, Mail, Save, Loader2, CheckCircle, AlertCircle, Camera, Lock, Eye, EyeOff } from 'lucide-react';
 import type { Profile } from '@/lib/platformTypes';
 import { mysqlApi } from '@/lib/platformTypes';
 
@@ -9,9 +9,11 @@ interface Props {
   approvedHustles: number;
   currentPlanCode: string;
   onProfileUpdated: (p: Profile) => void;
+  profileLoadError?: string;
+  onRetryProfile?: () => void;
 }
 
-export default function ProfilePanel({ profile, email, approvedHustles, currentPlanCode, onProfileUpdated }: Props) {
+export default function ProfilePanel({ profile, email, approvedHustles, currentPlanCode, onProfileUpdated, profileLoadError, onRetryProfile }: Props) {
   const [form, setForm] = useState({
     full_name: profile?.full_name ?? '',
     username: profile?.username ?? '',
@@ -52,6 +54,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
   };
   const tc = tierColors[profile?.tier ?? 'Bronze'] ?? tierColors.Bronze;
   const hustleBadge = approvedHustles >= 1000 ? 'President' : approvedHustles >= 500 ? 'Odogwu Hustler' : approvedHustles >= 100 ? 'Oga Hustler' : approvedHustles >= 50 ? 'Street Hustler' : approvedHustles >= 25 ? 'Pako Hustler' : approvedHustles >= 10 ? 'Nepo Hustler' : 'Baby Hustler';
+  const profileMessageIsSuccess = /success|updated/i.test(msg);
 
   async function uploadAvatar(event: React.ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0];
@@ -96,7 +99,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
     e.preventDefault();
     setMsg('');
     if (!profile?.user_id) {
-      setMsg('Your profile is not ready yet. Please refresh and try again.');
+      setMsg('Profile details are unavailable. Reload the profile data and try again.');
       return;
     }
     setSaving(true);
@@ -150,6 +153,12 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
 
   return (
     <div className="space-y-6 max-w-2xl">
+      {!profile && (
+        <div role="alert" className="flex flex-wrap items-center justify-between gap-3 border border-amber-400/25 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">
+          <p>{profileLoadError || 'Profile details could not be loaded.'} Use retry to refresh your account data.</p>
+          {onRetryProfile && <button type="button" onClick={onRetryProfile} className="border border-amber-300/30 px-3 py-2 text-xs font-semibold text-amber-200 hover:bg-amber-300/10">Retry profile</button>}
+        </div>
+      )}
       {/* Avatar + tier */}
       <div className="bg-[#111] border border-white/6 rounded-2xl p-6 flex items-center gap-5">
         <div className="relative">
@@ -160,7 +169,7 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
           </div>
           <label className="absolute -bottom-1 -right-1 flex h-7 w-7 cursor-pointer items-center justify-center rounded-lg bg-amber-400 shadow-lg transition-colors hover:bg-amber-300" title="Upload profile photo">
             {uploadingAvatar ? <Loader2 size={13} className="animate-spin text-black" /> : <Camera size={13} className="text-black" />}
-            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={uploadingAvatar} className="sr-only" />
+            <input type="file" accept="image/png,image/jpeg,image/webp" onChange={uploadAvatar} disabled={uploadingAvatar || !profile?.user_id} className="sr-only" />
           </label>
         </div>
         <div>
@@ -259,19 +268,19 @@ export default function ProfilePanel({ profile, email, approvedHustles, currentP
 
           {msg && (
             <div className={`flex items-center gap-2 px-4 py-3 rounded-xl text-sm border ${
-              msg.includes('success') || msg.includes('successfully')
+              profileMessageIsSuccess
                 ? 'bg-green-500/10 border-green-500/20 text-green-400'
-                : 'bg-red-500/10 border-red-500/20 text-red-400'
+                : 'bg-amber-400/10 border-amber-400/20 text-amber-200'
             }`}>
-              <CheckCircle size={14} />
+              {profileMessageIsSuccess ? <CheckCircle size={14} /> : <AlertCircle size={14} />}
               {msg}
             </div>
           )}
 
           <button
             type="submit"
-            disabled={saving}
-            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all disabled:opacity-60"
+            disabled={saving || !profile}
+            className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 text-black font-bold text-sm hover:shadow-lg hover:shadow-amber-500/20 hover:-translate-y-0.5 transition-all disabled:cursor-not-allowed disabled:opacity-60"
           >
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
             Save Changes

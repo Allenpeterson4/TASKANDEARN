@@ -1,43 +1,25 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Gift, Loader2, X } from 'lucide-react';
 import type { Balance } from '@/lib/platformTypes';
 import { mysqlApi } from '@/lib/platformTypes';
-
-type SocialLink = { label: string; url: string };
-type Announcement = { title: string; message: string; enabled: boolean; welcome_bonus: number; require_social: boolean; social_links: SocialLink[] };
+import type { DashboardAnnouncement } from '@/lib/mysqlApi';
 
 interface Props {
   userId: string;
+  announcement: DashboardAnnouncement | null;
+  alreadyClaimed: boolean;
   fullName?: string;
   onClose: () => void;
   onClaimOffer: () => void;
   onBalanceUpdated: (balance: Balance) => void;
 }
 
-export default function AnnouncementModal({ userId, fullName, onClose, onClaimOffer, onBalanceUpdated }: Props) {
-  const [announcement, setAnnouncement] = useState<Announcement | null>(null);
-  const [claimed, setClaimed] = useState(false);
+export default function AnnouncementModal({ userId, announcement, alreadyClaimed, fullName, onClose, onClaimOffer, onBalanceUpdated }: Props) {
+  const [claimed, setClaimed] = useState(alreadyClaimed);
   const [openedLinks, setOpenedLinks] = useState<number[]>([]);
   const [confirmed, setConfirmed] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [claiming, setClaiming] = useState(false);
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    async function load() {
-      const [{ data: config }, { data: claim }] = await Promise.all([
-        mysqlApi.from('platform_announcements').select('title, message, enabled, welcome_bonus, require_social, social_links').eq('singleton', true).maybeSingle(),
-        mysqlApi.from('welcome_bonus_claims').select('user_id').eq('user_id', userId).maybeSingle(),
-      ]);
-      if (!active) return;
-      if (config?.enabled) setAnnouncement(config as Announcement);
-      setClaimed(!!claim);
-      setLoading(false);
-    }
-    void load();
-    return () => { active = false; };
-  }, [userId]);
 
   async function claimBonus() {
     if (!announcement) return;
@@ -57,7 +39,7 @@ export default function AnnouncementModal({ userId, fullName, onClose, onClaimOf
     setClaiming(false);
   }
 
-  if (loading || !announcement) return null;
+  if (!announcement) return null;
   const canClaim = announcement.welcome_bonus > 0 && !claimed && (!announcement.require_social || (confirmed && openedLinks.length === announcement.social_links.length));
 
   return (

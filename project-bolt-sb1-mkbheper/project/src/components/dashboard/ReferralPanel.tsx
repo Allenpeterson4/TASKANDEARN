@@ -10,6 +10,7 @@ import {
   referralConfigKey,
   referralTierColors,
 } from '@/lib/referralConfig';
+import WalletBalanceCard from './WalletBalanceCard';
 
 type ReferredProfile = {
   referred_id: string;
@@ -101,12 +102,17 @@ export default function ReferralPanel({ profile, balance, referrals, isPremium, 
 
   return (
     <div className="min-w-0 space-y-5 sm:space-y-6">
+      <WalletBalanceCard
+        label="Referral wallet"
+        amount={`₦${(balance?.referral_balance ?? 0).toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+        icon={TrendingUp}
+        description="Referral rewards available to withdraw or transfer to your Hustler Wallet."
+      />
       {/* Stats row */}
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 lg:gap-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:gap-4">
         {[
           { label: 'Total Referrals', value: totalReferrals, icon: Users, color: 'text-amber-400 bg-amber-400/10' },
           { label: 'Bonuses Paid',    value: paidCount,      icon: Gift,  color: 'text-green-400 bg-green-400/10' },
-          { label: 'Ref. Balance',    value: `₦${(balance?.referral_balance ?? 0).toLocaleString()}`, icon: TrendingUp, color: 'text-blue-400 bg-blue-400/10' },
         ].map(s => {
           const Icon = s.icon;
           return (

@@ -37,6 +37,7 @@ function database(array $config): PDO
         PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
         PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
         PDO::ATTR_EMULATE_PREPARES => false,
+        PDO::ATTR_TIMEOUT => 8,
     ]);
     return $connection;
 }
@@ -90,17 +91,20 @@ function user_by_id(PDO $pdo, string $userId): ?array
 {
     $statement = $pdo->prepare(
         'SELECT u.id, u.email, u.role,
-                EXISTS(SELECT 1 FROM admin_mfa_factors f WHERE f.user_id = u.id AND f.verified_at IS NOT NULL) AS mfa_required
+                EXISTS(SELECT 1 FROM admin_mfa_factors f WHERE f.user_id = u.id AND f.verified_at IS NOT NULL) AS mfa_enabled
          FROM users u JOIN profiles p ON p.user_id = u.id WHERE u.id = ? LIMIT 1'
     );
     $statement->execute([$userId]);
     $user = $statement->fetch();
+    $mfaEnabled = $user && (bool)$user['mfa_enabled'];
     return $user ? [
         'id' => $user['id'],
         'email' => $user['email'],
         'app_metadata' => [
             'role' => $user['role'],
-            'mfa_required' => $user['role'] === 'admin',
+            'mfa_required' => $user['role'] === 'admin' && $mfaEnabled,
+            'mfa_enabled' => $mfaEnabled,
+            'mfa_verified' => $user['role'] !== 'admin' || !$mfaEnabled,
         ],
     ] : null;
 }
@@ -131,8 +135,8 @@ function request_user(PDO $pdo, array $config): ?array
         'email' => $user['email'],
         'app_metadata' => [
             'role' => $user['role'],
-            'mfa_required' => $user['role'] === 'admin',
-            'mfa_verified' => $user['role'] !== 'admin' || $user['mfa_verified_at'] !== null,
+            'mfa_required' => $user['role'] === 'admin' && (bool)$user['mfa_enabled'],
+            'mfa_verified' => $user['role'] !== 'admin' || !(bool)$user['mfa_enabled'] || $user['mfa_verified_at'] !== null,
             'mfa_enabled' => (bool)$user['mfa_enabled'],
         ],
     ] : null;

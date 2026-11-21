@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { mysqlApi } from '@/lib/platformTypes';
+import { imageContentType, publicImageUrl } from '@/lib/publicImageUrl';
 
 type SiteContent = Record<string, string>;
 const cachePrefix = 'site-content:';
@@ -26,14 +27,14 @@ export function cacheSiteContent(key: string, body: string) {
   }
   if (key === 'branding.favicon' && typeof document !== 'undefined') {
     const existingIcon = document.querySelector<HTMLLinkElement>('link[rel~="icon"]');
-    if (!body || /^https?:\/\//i.test(body)) {
+    if (!body) {
       existingIcon?.remove();
       return;
     }
     const icon = existingIcon ?? document.createElement('link');
     icon.rel = 'icon';
-    icon.href = mysqlApi.storage.from('site-media').getPublicUrl(body).data.publicUrl;
-    icon.type = body.toLowerCase().endsWith('.svg') ? 'image/svg+xml' : 'image/png';
+    icon.href = publicImageUrl(body) ?? '';
+    icon.type = imageContentType(body);
     if (!existingIcon) document.head.append(icon);
   }
 }

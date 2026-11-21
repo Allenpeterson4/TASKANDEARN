@@ -11,11 +11,11 @@ interface Props {
 
 export default function AdminMfaGate({ user, children }: Props) {
   const [factorReady, setFactorReady] = useState(false);
-  const [secret, setSecret] = useState('');
   const [code, setCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [verified, setVerified] = useState(false);
   const [error, setError] = useState('');
+  const [signingOut, setSigningOut] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -28,9 +28,8 @@ export default function AdminMfaGate({ user, children }: Props) {
           return;
         }
         if (!status.enabled) {
-          const enrollment = await mysqlApi.auth.enrollMfa();
-          if (!active) return;
-          setSecret(enrollment.secret);
+          setVerified(true);
+          return;
         }
         setFactorReady(true);
       } catch (mfaError) {
@@ -58,6 +57,17 @@ export default function AdminMfaGate({ user, children }: Props) {
     }
   }
 
+  async function signOut() {
+    setSigningOut(true);
+    setError('');
+    try {
+      await mysqlApi.auth.signOut();
+    } catch (signOutError) {
+      setError(signOutError instanceof Error ? signOutError.message : 'Could not sign out. Please try again.');
+      setSigningOut(false);
+    }
+  }
+
   if (verified) return children;
 
   return (
@@ -68,11 +78,11 @@ export default function AdminMfaGate({ user, children }: Props) {
           <div><h1 className="text-lg font-bold text-white">Admin verification</h1><p className="text-xs text-gray-400">Authenticator app required</p></div>
         </div>
         {loading && <p className="text-sm text-gray-400"><Loader2 className="mr-2 inline animate-spin" size={15} /> Preparing verification</p>}
-        {!loading && secret && <div className="space-y-2 text-sm text-gray-300"><p>Add an account in your authenticator app using this setup key:</p><code className="block select-all break-all rounded-lg bg-black/30 p-3 text-center tracking-widest text-emerald-200">{secret}</code><p className="text-xs text-gray-500">Choose time-based one-time password (TOTP), 6 digits, 30-second interval.</p></div>}
-        {!loading && factorReady && !secret && <p className="text-sm text-gray-300">Enter the six-digit code from your authenticator app.</p>}
+        {!loading && factorReady && <p className="text-sm text-gray-300">Enter the six-digit code from your authenticator app.</p>}
         {!loading && factorReady && <label className="block text-xs text-gray-400">Verification code<input required inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{6}" maxLength={6} value={code} onChange={event => setCode(event.target.value)} className="admin-input mt-1 text-center text-lg tracking-[0.3em]" /></label>}
         {error && <p role="alert" className="border border-amber-400/25 bg-amber-400/5 px-3 py-2 text-sm text-amber-100">{error}</p>}
-        <button disabled={loading || !factorReady} className="w-full rounded-lg bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">Verify and continue</button>
+        <button type="submit" disabled={loading || !factorReady} className="w-full rounded-lg bg-emerald-300 px-4 py-3 text-sm font-bold text-black disabled:opacity-50">Verify and continue</button>
+        <button type="button" disabled={signingOut} onClick={() => void signOut()} className="w-full border border-white/10 px-4 py-3 text-sm text-gray-300 disabled:opacity-50">{signingOut ? 'Signing out…' : 'Sign out'}</button>
       </form>
       <style>{`.admin-input{width:100%;border:1px solid rgba(255,255,255,.1);border-radius:.5rem;background:#0a0a0a;padding:.7rem .75rem;color:#fff;font-size:.875rem;outline:none}`}</style>
     </div>

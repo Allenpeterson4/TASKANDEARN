@@ -156,6 +156,7 @@ CREATE TABLE IF NOT EXISTS referrals (
   bonus_paid BOOLEAN NOT NULL DEFAULT FALSE,
   created_at DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
   UNIQUE KEY referrals_referred_unique (referred_id),
+  KEY referrals_referrer_created (referrer_id, created_at),
   CONSTRAINT referrals_referrer_fk FOREIGN KEY (referrer_id) REFERENCES users(id) ON DELETE CASCADE,
   CONSTRAINT referrals_referred_fk FOREIGN KEY (referred_id) REFERENCES users(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

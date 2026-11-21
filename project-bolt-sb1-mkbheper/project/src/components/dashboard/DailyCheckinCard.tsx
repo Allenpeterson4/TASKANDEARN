@@ -1,31 +1,21 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CalendarCheck, Check, Loader2 } from 'lucide-react';
 import type { Balance } from '@/lib/platformTypes';
 import { mysqlApi } from '@/lib/platformTypes';
+import type { DashboardCheckin } from '@/lib/mysqlApi';
 
-type Checkin = { checkin_date: string; streak: number; reward: number };
-
-export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUpdated }: { userId: string; firstName: string; badge: string; onBalanceUpdated: (balance: Balance) => void }) {
-  const [checkin, setCheckin] = useState<Checkin | null>(null);
-  const [claimedToday, setClaimedToday] = useState(false);
+export default function DailyCheckinCard({ userId, firstName, badge, latestCheckin, todayCheckin, onBalanceUpdated }: {
+  userId: string;
+  firstName: string;
+  badge: string;
+  latestCheckin: DashboardCheckin | null;
+  todayCheckin: DashboardCheckin | null;
+  onBalanceUpdated: (balance: Balance) => void;
+}) {
+  const [checkin, setCheckin] = useState<DashboardCheckin | null>(todayCheckin ?? latestCheckin);
+  const [claimedToday, setClaimedToday] = useState(Boolean(todayCheckin));
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
-
-  useEffect(() => {
-    let active = true;
-    const today = new Date().toISOString().slice(0, 10);
-    async function load() {
-      const [{ data: latest }, { data: todayRecord }] = await Promise.all([
-        mysqlApi.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
-        mysqlApi.from('daily_checkins').select('checkin_date, streak, reward').eq('user_id', userId).eq('checkin_date', today).maybeSingle(),
-      ]);
-      if (!active) return;
-      setCheckin((todayRecord ?? latest) as Checkin | null);
-      setClaimedToday(!!todayRecord);
-    }
-    void load();
-    return () => { active = false; };
-  }, [userId]);
 
   async function claim() {
     setLoading(true);
@@ -36,7 +26,7 @@ export default function DailyCheckinCard({ userId, firstName, badge, onBalanceUp
       setLoading(false);
       return;
     }
-    const reward = data as Checkin;
+    const reward = data as DashboardCheckin;
     setCheckin(reward);
     setClaimedToday(true);
     setMessage(`Hi, ${badge.toLowerCase()}, you just earned ₦${Number(reward.reward).toLocaleString()} for checking in and you are on a ${reward.streak}-day streak, ${firstName}.`);

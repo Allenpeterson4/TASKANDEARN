@@ -53,8 +53,9 @@ import AdminBrandingPanel from './AdminBrandingPanel';
 import AdminThemeColorsPanel from './AdminThemeColorsPanel';
 import AdminEmailPanel from './AdminEmailPanel';
 import AdminReferralSettingsPanel from './AdminReferralSettingsPanel';
+import AdminMfaSettingsPanel from './AdminMfaSettingsPanel';
 
-type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportTickets' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding' | 'colors' | 'email' | 'referralContent';
+type Section = 'tasks' | 'users' | 'submissions' | 'withdrawals' | 'payoutSettings' | 'planSubmissions' | 'funding' | 'supportTickets' | 'supportSettings' | 'content' | 'plans' | 'activity' | 'advertisement' | 'controls' | 'campaigns' | 'announcement' | 'branding' | 'colors' | 'email' | 'referralContent' | 'security';
 type AccountStatus = 'active' | 'suspended' | 'banned';
 type VerificationMode = 'manual' | 'automatic';
 type AdminProfile = Pick<Profile, 'user_id' | 'full_name' | 'username' | 'phone' | 'tier' | 'joined_at' | 'avatar_url'> & {
@@ -127,6 +128,7 @@ const sections: { id: Section; label: string; icon: typeof ClipboardList }[] = [
   { id: 'branding', label: 'Brand images', icon: Image },
   { id: 'colors', label: 'Colors & theme', icon: Palette },
   { id: 'email', label: 'Email & templates', icon: Mail },
+  { id: 'security', label: 'Security & 2FA', icon: ShieldCheck },
 ];
 
 interface Props {
@@ -166,6 +168,8 @@ export default function AdminPanel({ user }: Props) {
   const [resetLink, setResetLink] = useState('');
   const [messageUser, setMessageUser] = useState<AdminProfile | null>(null);
   const [adminMessageDraft, setAdminMessageDraft] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
+  const [logoutError, setLogoutError] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -484,6 +488,18 @@ export default function AdminPanel({ user }: Props) {
     notify(status === 'paid' ? 'Payout recorded and wallet debited.' : 'Withdrawal rejected.');
   }
 
+  async function handleAdminLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    setLogoutError('');
+    try {
+      await mysqlApi.auth.signOut();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : 'Could not sign out. Please try again.');
+      setLoggingOut(false);
+    }
+  }
+
   const userBalances = new Map(balances.map(balance => [balance.user_id, balance]));
   const userProfiles = new Map(profiles.map(profile => [profile.user_id, profile]));
   const userRiskFlags = new Map<string, FraudFlag[]>();
@@ -513,16 +529,20 @@ export default function AdminPanel({ user }: Props) {
           <div className="flex items-center gap-2">
             <ThemeToggle />
             <button
-              onClick={() => void mysqlApi.auth.signOut()}
-              className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-red-400/30 hover:text-red-300"
+              type="button"
+              disabled={loggingOut}
+              aria-busy={loggingOut}
+              onClick={() => void handleAdminLogout()}
+              className="flex items-center gap-2 rounded-lg border border-white/10 px-3 py-2 text-sm text-gray-300 transition-colors hover:border-red-400/30 hover:text-red-300 disabled:cursor-wait disabled:opacity-60"
             >
-              <LogOut size={15} /> Sign out
+              <LogOut size={15} /> {loggingOut ? 'Signing out…' : 'Sign out'}
             </button>
           </div>
         </div>
       </header>
 
       <main className="mx-auto max-w-7xl px-4 py-7 sm:px-6">
+        {logoutError && <p role="alert" className="mb-5 border border-red-400/25 bg-red-400/5 px-4 py-3 text-sm text-red-300">Sign out failed: {logoutError}</p>}
         <div className="mb-7 flex flex-wrap items-end justify-between gap-4">
           <div>
             <p className="mb-1 text-xs font-bold uppercase tracking-wider text-emerald-300">Operations</p>
@@ -792,6 +812,7 @@ export default function AdminPanel({ user }: Props) {
             {section === 'colors' && <AdminThemeColorsPanel />}
             {section === 'email' && <AdminEmailPanel />}
             {section === 'referralContent' && <AdminReferralSettingsPanel />}
+            {section === 'security' && <AdminMfaSettingsPanel />}
           </>
         )}
         </div>

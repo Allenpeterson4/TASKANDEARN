@@ -1,6 +1,5 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { Check, Circle, Info } from 'lucide-react';
-import { mysqlApi } from '@/lib/platformTypes';
 import type { Task, TaskCompletion } from '@/lib/platformTypes';
 
 type Settings = {
@@ -16,6 +15,7 @@ type Settings = {
 };
 
 type ActivityRow = { activity_date: string; online_seconds?: number; active_seconds?: number; interactions?: number };
+type CheckinProgress = { checkin_date: string; streak: number };
 type Requirement = { label: string; value: string; complete: boolean };
 
 function progressPercent(current: number, target: number) {
@@ -44,43 +44,23 @@ function levelForHustles(count: number) {
   return 0;
 }
 
-export default function WithdrawalProgressCard({ userId, approvedHustles, referralCount, tasks, completions }: {
-  userId: string;
+export default function WithdrawalProgressCard({ settingsData, latestCheckin, activityRows, approvedHustles, referralCount, tasks, completions }: {
+  settingsData: Partial<Settings> | null;
+  latestCheckin: CheckinProgress | null;
+  activityRows: ActivityRow[];
   approvedHustles: number;
   referralCount: number;
   tasks: Task[];
   completions: TaskCompletion[];
 }) {
-  const [settings, setSettings] = useState(defaults);
-  const [streak, setStreak] = useState(0);
-  const [onlineMinutes, setOnlineMinutes] = useState(0);
-  const [interactions, setInteractions] = useState(0);
   const [expanded, setExpanded] = useState(false);
-
-  useEffect(() => {
-    let active = true;
-    async function loadRequirements() {
-      const [{ data: settingsData }, { data: checkinData }, { data: activityData }] = await Promise.all([
-        mysqlApi.from('platform_settings').select('hustler_withdrawals_enabled, minimum_hustles, require_all_hustles, minimum_hustle_level, minimum_referrals, minimum_checkin_streak, minimum_online_minutes, minimum_interactions, measurement_days').eq('singleton', true).maybeSingle(),
-        mysqlApi.from('daily_checkins').select('checkin_date, streak').eq('user_id', userId).order('checkin_date', { ascending: false }).limit(1).maybeSingle(),
-        mysqlApi.from('user_activity_daily').select('*').eq('user_id', userId).gte('activity_date', new Date(Date.now() - 365 * 86400000).toISOString().slice(0, 10)),
-      ]);
-      if (!active) return;
-      if (settingsData) setSettings({ ...defaults, ...settingsData });
-      const measurementDays = Number(settingsData?.measurement_days ?? defaults.measurement_days);
-      const lastCheckin = checkinData as { checkin_date: string; streak: number } | null;
-      const yesterday = new Date();
-      yesterday.setDate(yesterday.getDate() - 1);
-      if (lastCheckin && lastCheckin.checkin_date >= yesterday.toISOString().slice(0, 10)) setStreak(Number(lastCheckin.streak));
-      const activityRows = (activityData ?? []) as ActivityRow[];
-      const cutoff = new Date(Date.now() - measurementDays * 86400000).toISOString().slice(0, 10);
-      const measuredRows = activityRows.filter(row => row.activity_date >= cutoff);
-      setOnlineMinutes(Math.floor(measuredRows.reduce((total, row) => total + Number(row.online_seconds ?? row.active_seconds ?? 0), 0) / 60));
-      setInteractions(measuredRows.reduce((total, row) => total + Number(row.interactions ?? 0), 0));
-    }
-    void loadRequirements();
-    return () => { active = false; };
-  }, [userId]);
+  const settings = { ...defaults, ...settingsData };
+  const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+  const streak = latestCheckin && latestCheckin.checkin_date >= yesterday ? Number(latestCheckin.streak) : 0;
+  const cutoff = new Date(Date.now() - Number(settings.measurement_days ?? defaults.measurement_days) * 86400000).toISOString().slice(0, 10);
+  const measuredRows = activityRows.filter(row => row.activity_date >= cutoff);
+  const onlineMinutes = Math.floor(measuredRows.reduce((total, row) => total + Number(row.online_seconds ?? row.active_seconds ?? 0), 0) / 60);
+  const interactions = measuredRows.reduce((total, row) => total + Number(row.interactions ?? 0), 0);
 
   const currentLevel = levelForHustles(approvedHustles);
   const approvedTaskIds = new Set(completions.filter(completion => completion.status === 'approved').map(completion => completion.task_id));

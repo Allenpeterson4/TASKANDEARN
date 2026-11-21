@@ -15,6 +15,8 @@ export default function App() {
   const [loaded, setLoaded] = useState(false);
   const [showAuth, setShowAuth] = useState(false);
   const [authMode, setAuthMode] = useState<AuthMode>('login');
+  const [logoutError, setLogoutError] = useState('');
+  const [loggingOut, setLoggingOut] = useState(false);
   const { user, loading: authLoading } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
@@ -29,6 +31,18 @@ export default function App() {
     setShowAuth(true);
   }
 
+  async function handleLogout() {
+    setLoggingOut(true);
+    setLogoutError('');
+    try {
+      await mysqlApi.auth.signOut();
+    } catch (error) {
+      setLogoutError(error instanceof Error ? error.message : 'Could not sign out. Please try again.');
+    } finally {
+      setLoggingOut(false);
+    }
+  }
+
   if (!loaded || authLoading) {
     return <Preloader ready={!authLoading} onFinish={handlePreloaderFinish} />;
   }
@@ -41,7 +55,7 @@ export default function App() {
 
   if (user?.app_metadata?.role === 'admin') {
     const content = isAdminRoute ? <AdminPanel user={user} /> : <Dashboard user={user} />;
-    return user.app_metadata.mfa_required
+    return user.app_metadata.mfa_required && !user.app_metadata.mfa_verified
       ? <AdminMfaGate user={user}>{content}</AdminMfaGate>
       : content;
   }
@@ -54,9 +68,10 @@ export default function App() {
             <h1 className="text-white text-2xl font-black">Admin access required</h1>
             <p className="text-gray-400 text-sm mt-2">This account is not authorized to use the administration console.</p>
             <div className="mt-6 flex justify-center gap-3">
-              <button onClick={() => void mysqlApi.auth.signOut()} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5">Sign out</button>
+              <button type="button" disabled={loggingOut} onClick={() => void handleLogout()} className="rounded-lg border border-white/10 px-4 py-2 text-sm text-gray-300 hover:bg-white/5 disabled:opacity-50">{loggingOut ? 'Signing out…' : 'Sign out'}</button>
               <button onClick={() => navigate('/')} className="rounded-lg bg-emerald-300 px-4 py-2 text-sm font-bold text-black">Return home</button>
             </div>
+            {logoutError && <p role="alert" className="mt-3 text-sm text-red-300">{logoutError}</p>}
           </div>
         </div>
       );

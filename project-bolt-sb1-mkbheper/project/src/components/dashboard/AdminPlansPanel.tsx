@@ -109,7 +109,7 @@ export default function AdminPlansPanel() {
   return (
     <div className="space-y-6">
       <div className="border-l-2 border-amber-400 pl-4 text-sm text-gray-400">
-        Hustle and withdrawal limits are enforced by Supabase. Premium activation is not client-controlled; paid plans still require verified payment review.
+        Hustle and withdrawal limits are enforced by the MySQL backend. Premium activation is not client-controlled; paid plans still require verified payment review.
       </div>
       {message && <div role="status" className="flex items-center justify-between gap-3 border border-white/10 bg-white/5 px-4 py-3 text-sm text-gray-300">{message}<button onClick={() => setMessage('')} aria-label="Dismiss message"><X size={15} /></button></div>}
 

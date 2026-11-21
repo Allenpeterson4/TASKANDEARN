@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { FileText, Image, Loader2, Plus, Save, Trash2, Upload, X } from 'lucide-react';
 import { cacheSiteContent } from '@/hooks/useSiteContent';
 import { mysqlApi } from '@/lib/platformTypes';
+import { publicImageUrl } from '@/lib/publicImageUrl';
 import { legacyReferralStepKeys, referralConfigKey } from '@/lib/referralConfig';
 
 type ContentEntry = {
@@ -76,9 +77,7 @@ export default function AdminContentPanel() {
   );
 
   function imageUrl(path: string) {
-    if (!path) return '';
-    if (/^https?:\/\//i.test(path)) return '';
-    return mysqlApi.storage.from('site-media').getPublicUrl(path).data.publicUrl;
+    return publicImageUrl(path) ?? '';
   }
 
   async function uploadContentImage(file?: File) {

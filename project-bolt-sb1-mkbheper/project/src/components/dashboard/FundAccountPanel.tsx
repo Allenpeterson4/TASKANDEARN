@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Banknote, Copy, CreditCard, Loader2, Upload } from 'lucide-react';
 import { mysqlApi } from '@/lib/platformTypes';
+import WalletBalanceCard from './WalletBalanceCard';
 
 type FundingSettings = { enabled: boolean; bank_name: string; account_name: string; account_number: string; instructions: string };
 type Deposit = { id: string; amount: number; payment_method: string; provider_reference: string | null; status: string; created_at: string; review_note: string | null };
@@ -70,7 +71,12 @@ export default function FundAccountPanel({ userId }: { userId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="border border-orange-400/20 bg-orange-400/[0.04] p-5"><p className="text-xs font-bold uppercase tracking-wider text-orange-200">Fund Wallet</p><p className="mt-2 text-3xl font-black text-white">₦{fundBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}</p><p className="mt-1 text-xs text-gray-400">Deposited funds are reserved for campaign sponsorship.</p></div>
+      <WalletBalanceCard
+        label="Fund wallet"
+        amount={`₦${fundBalance.toLocaleString('en-NG', { minimumFractionDigits: 2 })}`}
+        icon={Banknote}
+        description="Deposited funds are reserved for campaign sponsorship."
+      />
       {message && <div role="status" className="border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-sm text-amber-200">{message}</div>}
       {loading ? <div className="flex min-h-40 items-center justify-center text-gray-400"><Loader2 className="mr-2 animate-spin" size={17} /> Loading funding options</div> : !settings.enabled ? <div className="border border-blue-400/20 bg-blue-400/5 p-5 text-sm text-blue-300">Wallet funding is temporarily unavailable. Please check back when the admin enables a deposit method.</div> : (
         <>
